@@ -1,5 +1,6 @@
 package dev.metro.anime
 
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -18,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import dev.metro.anime.data.AutoUpdateManager
 import dev.metro.anime.data.UpdateRepository
 import dev.metro.anime.data.model.AnimeEpisode
 import dev.metro.anime.data.model.AnimeSource
@@ -49,6 +51,15 @@ class MainActivity : ComponentActivity() {
     private lateinit var repository: AnimeRepository
     private lateinit var settingsRepository: MetroSettingsRepository
     private lateinit var updateRepository: UpdateRepository
+    private var openUpdatesRequest = mutableStateOf(false)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra("open_updates", false)) {
+            openUpdatesRequest.value = true
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,6 +67,11 @@ class MainActivity : ComponentActivity() {
         repository = AnimeRepository(applicationContext)
         settingsRepository = MetroSettingsRepository(applicationContext)
         updateRepository = UpdateRepository(applicationContext)
+        dev.metro.anime.data.AutoUpdateNotificationHelper.createNotificationChannel(applicationContext)
+
+        if (intent?.getBooleanExtra("open_updates", false) == true) {
+            openUpdatesRequest.value = true
+        }
 
         setContent {
             val settings by settingsRepository.settings.collectAsState()
@@ -68,12 +84,28 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
+            val openUpdates by openUpdatesRequest
+            var currentScreen by remember {
+                mutableStateOf<Screen>(if (openUpdates) Screen.Settings else Screen.Home)
+            }
+
+            LaunchedEffect(openUpdates) {
+                if (openUpdates) {
+                    currentScreen = Screen.Settings
+                    openUpdatesRequest.value = false
+                }
+            }
+
+            LaunchedEffect(settings.autoUpdateIntervalMinutes) {
+                if (settings.autoUpdateIntervalMinutes > 0) {
+                    AutoUpdateManager.schedule(applicationContext, settings.autoUpdateIntervalMinutes)
+                }
+            }
+
             MetroTheme(scheme = customScheme) {
                 CompositionLocalProvider(
                     dev.metro.anime.ui.theme.LocalBlurredWallpaper provides (if (settings.blurEnabled) wallpaper?.blurred else null),
                 ) {
-                    var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
-
                 BackHandler(enabled = currentScreen !is Screen.Home) {
                     currentScreen = when (val s = currentScreen) {
                         is Screen.Player -> Screen.Details(s.anime)

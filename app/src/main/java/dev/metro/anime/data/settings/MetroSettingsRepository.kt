@@ -50,6 +50,8 @@ data class AnimeSettings(
     val backgroundDim: Float = 0.55f, // Dim overlay over wallpaper
     val hasCustomWallpaper: Boolean = false,
     val wallpaperPalette: List<Int> = emptyList(),
+    val autoUpdateIntervalMinutes: Int = 0, // 0 = никогда, 10, 30, 60, ...
+    val lastNotifiedVersion: String = "",
 )
 
 data class WallpaperBitmapHolder(
@@ -68,6 +70,8 @@ class MetroSettingsRepository(private val context: Context) {
         private val KEY_BG_DIM = floatPreferencesKey("bg_dim")
         private val KEY_HAS_WALLPAPER = booleanPreferencesKey("has_wallpaper")
         private val KEY_WALLPAPER_PALETTE = stringPreferencesKey("wallpaper_palette")
+        private val KEY_AUTO_UPDATE_INTERVAL = intPreferencesKey("auto_update_interval")
+        private val KEY_LAST_NOTIFIED_VERSION = stringPreferencesKey("last_notified_version")
 
         val ACCENT_PRESETS = listOf(
             MetroAccentOption("Бирюзовый", 0xFF00ABA9.toInt()),
@@ -99,6 +103,8 @@ class MetroSettingsRepository(private val context: Context) {
             backgroundDim = prefs[KEY_BG_DIM] ?: 0.55f,
             hasCustomWallpaper = prefs[KEY_HAS_WALLPAPER] ?: false,
             wallpaperPalette = rawPalette,
+            autoUpdateIntervalMinutes = prefs[KEY_AUTO_UPDATE_INTERVAL] ?: 0,
+            lastNotifiedVersion = prefs[KEY_LAST_NOTIFIED_VERSION] ?: "",
         )
     }
 
@@ -153,6 +159,23 @@ class MetroSettingsRepository(private val context: Context) {
         scope.launch {
             app.animeSettingsStore.edit { prefs ->
                 prefs[KEY_BG_DIM] = clamped
+            }
+        }
+    }
+
+    fun setAutoUpdateInterval(minutes: Int) {
+        val valid = minutes.coerceAtLeast(0)
+        scope.launch {
+            app.animeSettingsStore.edit { prefs ->
+                prefs[KEY_AUTO_UPDATE_INTERVAL] = valid
+            }
+        }
+    }
+
+    fun setLastNotifiedVersion(version: String) {
+        scope.launch {
+            app.animeSettingsStore.edit { prefs ->
+                prefs[KEY_LAST_NOTIFIED_VERSION] = version
             }
         }
     }

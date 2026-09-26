@@ -46,75 +46,74 @@ class UpdateRepository(private val context: Context) {
         private const val TAG = "MetroAnimeUpdate"
     }
 
-    suspend fun checkForUpdates() {
-        _updateState.value = UpdateState.Checking
-        withContext(Dispatchers.IO) {
-            try {
-                val url = URL(GITHUB_API_URL)
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 8000
-                    readTimeout = 8000
-                    setRequestProperty("Accept", "application/vnd.github.v3+json")
-                    setRequestProperty("User-Agent", "MetroAnime-App/${BuildConfig.VERSION_NAME}")
-                }
+    suspend fun fetchLatestRelease(): ReleaseInfo? = withContext(Dispatchers.IO) {
+        try {
+            val url = URL(GITHUB_API_URL)
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                connectTimeout = 8000
+                readTimeout = 8000
+                setRequestProperty("Accept", "application/vnd.github.v3+json")
+                setRequestProperty("User-Agent", "MetroAnime-App/${BuildConfig.VERSION_NAME}")
+            }
 
-                if (conn.responseCode == 404) {
-                    _updateState.value = UpdateState.UpToDate
-                    return@withContext
-                }
+            if (conn.responseCode != 200) return@withContext null
 
-                if (conn.responseCode != 200) {
-                    _updateState.value = UpdateState.Error("Сервер вернул код ${conn.responseCode}")
-                    return@withContext
-                }
+            val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
+            val root = JSONObject(jsonStr)
 
-                val jsonStr = conn.inputStream.bufferedReader().use { it.readText() }
-                val root = JSONObject(jsonStr)
+            val tagName = root.optString("tag_name", "")
+            val body = root.optString("body", "Нет описания изменений.")
+            val rawVersion = tagName.removePrefix("v").trim()
 
-                val tagName = root.optString("tag_name", "")
-                val body = root.optString("body", "Нет описания изменений.")
-                val rawVersion = tagName.removePrefix("v").trim()
+            // Find APK in assets
+            val assets = root.optJSONArray("assets")
+            var apkUrl = ""
+            var apkSize = 0L
 
-                // Find APK in assets
-                val assets = root.optJSONArray("assets")
-                var apkUrl = ""
-                var apkSize = 0L
-
-                if (assets != null) {
-                    for (i in 0 until assets.length()) {
-                        val asset = assets.getJSONObject(i)
-                        val name = asset.optString("name", "")
-                        if (name.endsWith(".apk", ignoreCase = true)) {
-                            apkUrl = asset.optString("browser_download_url", "")
-                            apkSize = asset.optLong("size", 0L)
-                            break
-                        }
+            if (assets != null) {
+                for (i in 0 until assets.length()) {
+                    val asset = assets.getJSONObject(i)
+                    val name = asset.optString("name", "")
+                    if (name.endsWith(".apk", ignoreCase = true)) {
+                        apkUrl = asset.optString("browser_download_url", "")
+                        apkSize = asset.optLong("size", 0L)
+                        break
                     }
                 }
-
-                if (apkUrl.isBlank()) {
-                    _updateState.value = UpdateState.UpToDate
-                    return@withContext
-                }
-
-                val currentVersion = BuildConfig.VERSION_NAME
-                if (isNewerVersion(rawVersion, currentVersion)) {
-                    _updateState.value = UpdateState.Available(
-                        ReleaseInfo(
-                            tagName = tagName,
-                            versionName = rawVersion,
-                            changelog = body,
-                            apkDownloadUrl = apkUrl,
-                            apkSize = apkSize,
-                        )
-                    )
-                } else {
-                    _updateState.value = UpdateState.UpToDate
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Ошибка проверки обновлений: ${e.message}")
-                _updateState.value = UpdateState.Error(e.localizedMessage ?: "Сетевая ошибка")
             }
+
+            if (apkUrl.isBlank()) return@withContext null
+
+            val currentVersion = BuildConfig.VERSION_NAME
+            if (isNewerVersion(rawVersion, currentVersion)) {
+                ReleaseInfo(
+                    tagName = tagName,
+                    versionName = rawVersion,
+                    changelog = body,
+                    apkDownloadUrl = apkUrl,
+                    apkSize = apkSize,
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Ошибка проверки обновлений: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun checkForUpdates() {
+        _updateState.value = UpdateState.Checking
+        try {
+            val release = fetchLatestRelease()
+            if (release != null) {
+                _updateState.value = UpdateState.Available(release)
+            } else {
+                _updateState.value = UpdateState.UpToDate
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Ошибка проверки обновлений: ${e.message}")
+            _updateState.value = UpdateState.Error(e.localizedMessage ?: "Сетевая ошибка")
         }
     }
 
