@@ -99,7 +99,7 @@ UPLOAD_RES=$(curl -s -X POST \
     --data-binary @"$APK_PATH" \
     "$UPLOAD_URL")
 
-DOWNLOAD_URL=$(echo "$UPLOAD_RES" | grep '"browser_download_url":' | head -n1 | sed -E 's/.*"browser_download_url": "([^"]+)".*/\1/')
+DOWNLOAD_URL=$(echo "$UPLOAD_RES" | grep -o 'https://github.com/[^"]*app-release.apk' | head -n1)
 
 if [ -n "$DOWNLOAD_URL" ]; then
     echo "=========================================="
