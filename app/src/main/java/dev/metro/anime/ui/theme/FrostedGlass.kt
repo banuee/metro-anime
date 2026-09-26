@@ -8,6 +8,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -20,21 +21,16 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionOnScreen
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -101,8 +97,8 @@ fun DialogWindowBlurEffect(
 }
 
 /**
- * Стеклянный бокс с фрост-подложкой: идеальный 1:1 срез блюра под своей позицией в окне.
- * Никаких сдвигов или темных непрозрачных пятен поверх обоев.
+ * Стеклянный полупрозрачный бокс Metro Acrylic: мягкая тонировка, видимый размытый фон обоев,
+ * тонкий стеклянный контур и отсутствие артефактов при скролле.
  */
 @Composable
 fun FrostedGlassBox(
@@ -115,34 +111,19 @@ fun FrostedGlassBox(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val scheme = LocalMetroScheme.current
-    val blurred = LocalBlurredWallpaper.current
-    var pos by remember { mutableStateOf(Offset.Zero) }
+    val effectiveTint = if (tint != Color.Transparent) tint else scheme.glassHover
 
     Box(
         modifier = modifier
-            .onGloballyPositioned { coordinates ->
-                pos = coordinates.positionOnScreen()
-            }
             .clip(RoundedCornerShape(shape))
-            .drawBehind {
-                if (blurred != null) {
-                    // Срез блюра ровно в экранных координатах элемента — 1:1 совпадение с фоном
-                    drawImage(
-                        image = blurred,
-                        topLeft = Offset(-pos.x, -pos.y),
-                    )
-                    if (tint != Color.Transparent) {
-                        drawRect(tint)
-                    }
-                } else {
-                    // Фолбэк без обоев: чистый полупрозрачный акрил
-                    drawRect(if (tint != Color.Transparent) tint else scheme.glass)
-                }
-            }
+            .background(Color(0xFF14141A).copy(alpha = 0.52f))
+            .background(effectiveTint)
             .then(
                 if (borderColor != null) {
                     Modifier.border(borderWidth, borderColor, RoundedCornerShape(shape))
-                } else Modifier
+                } else {
+                    Modifier.border(borderWidth, Color.White.copy(alpha = 0.12f), RoundedCornerShape(shape))
+                }
             ),
         contentAlignment = contentAlignment,
     ) {

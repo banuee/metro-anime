@@ -46,13 +46,8 @@ import dev.metro.anime.data.repository.AnimeRepository
 import dev.metro.anime.ui.components.MetroButton
 import dev.metro.anime.ui.components.MetroChip
 import dev.metro.anime.ui.theme.LocalMetroScheme
-import dev.chrisbanes.haze.HazeDefaults
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
 import dev.metro.anime.ui.theme.MetroDimens
 import dev.metro.anime.ui.theme.MetroFonts
-import dev.metro.anime.ui.theme.metroBlurEffect
 import dev.metro.anime.ui.theme.metroClickable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -74,7 +69,6 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val scheme = LocalMetroScheme.current
-    val hazeState = remember { HazeState() }
 
     var playPausePulseVisible by remember { mutableStateOf(false) }
     var playPausePulseIsPlay by remember { mutableStateOf(false) }
@@ -264,8 +258,7 @@ fun PlayerScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .hazeSource(state = hazeState),
+            .background(Color.Black),
     ) {
         // Video View
         AndroidView(
@@ -400,16 +393,8 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .size(76.dp)
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeDefaults.style(
-                            backgroundColor = Color(0xFF101016).copy(alpha = 0.40f),
-                            blurRadius = 24.dp,
-                        ),
-                    )
-                    .metroBlurEffect(radiusPx = 28f)
                     .clip(RoundedCornerShape(38.dp))
-                    .background(Color(0xFF101016).copy(alpha = 0.40f))
+                    .background(Color(0xFF101016).copy(alpha = 0.65f))
                     .border(1.5.dp, scheme.accent.copy(alpha = 0.8f), RoundedCornerShape(38.dp)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -436,16 +421,8 @@ fun PlayerScreen(
             val boost = if (isHoldingLeft) "1.5x" else "2.0x"
             Box(
                 modifier = Modifier
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeDefaults.style(
-                            backgroundColor = Color(0xFF101016).copy(alpha = 0.45f),
-                            blurRadius = 24.dp,
-                        ),
-                    )
-                    .metroBlurEffect(radiusPx = 28f)
                     .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                    .background(Color(0xFF101016).copy(alpha = 0.45f))
+                    .background(Color(0xFF101016).copy(alpha = 0.70f))
                     .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
@@ -490,16 +467,8 @@ fun PlayerScreen(
         ) {
             Box(
                 modifier = Modifier
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeDefaults.style(
-                            backgroundColor = Color(0xFF101016).copy(alpha = 0.45f),
-                            blurRadius = 24.dp,
-                        ),
-                    )
-                    .metroBlurEffect(radiusPx = 28f)
                     .clip(RoundedCornerShape(MetroDimens.radius))
-                    .background(Color(0xFF101016).copy(alpha = 0.45f))
+                    .background(Color(0xFF101016).copy(alpha = 0.70f))
                     .border(1.dp, scheme.accent.copy(alpha = 0.6f), RoundedCornerShape(MetroDimens.radius))
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center,
@@ -602,16 +571,8 @@ fun PlayerScreen(
             if (skipTargetSec != null) {
                 Box(
                     modifier = Modifier
-                        .hazeEffect(
-                            state = hazeState,
-                            style = HazeDefaults.style(
-                                backgroundColor = Color(0xFF101016).copy(alpha = 0.45f),
-                                blurRadius = 24.dp,
-                            ),
-                        )
-                        .metroBlurEffect(radiusPx = 28f)
                         .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                        .background(Color(0xFF101016).copy(alpha = 0.45f))
+                        .background(Color(0xFF101016).copy(alpha = 0.65f))
                         .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
                         .metroClickable {
                             exoPlayer.seekTo(skipTargetSec * 1000L)
@@ -647,16 +608,8 @@ fun PlayerScreen(
                     .align(Alignment.TopEnd)
                     .padding(top = 18.dp, end = 20.dp)
                     .size(44.dp)
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeDefaults.style(
-                            backgroundColor = Color(0xFF101016).copy(alpha = 0.45f),
-                            blurRadius = 24.dp,
-                        ),
-                    )
-                    .metroBlurEffect(radiusPx = 28f)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF101016).copy(alpha = 0.45f))
+                    .background(Color(0xFF101016).copy(alpha = 0.65f))
                     .border(1.dp, scheme.accent, RoundedCornerShape(10.dp))
                     .metroClickable { isControlsLocked = false },
                 contentAlignment = Alignment.Center,
@@ -705,16 +658,8 @@ fun PlayerScreen(
                     Row(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
-                            .hazeEffect(
-                                state = hazeState,
-                                style = HazeDefaults.style(
-                                    backgroundColor = Color(0xFF101016).copy(alpha = 0.35f),
-                                    blurRadius = 24.dp,
-                                ),
-                            )
-                            .metroBlurEffect(radiusPx = 28f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF101016).copy(alpha = 0.35f))
+                            .background(Color(0xFF101016).copy(alpha = 0.65f))
                             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -772,16 +717,8 @@ fun PlayerScreen(
                     Row(
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .hazeEffect(
-                                state = hazeState,
-                                style = HazeDefaults.style(
-                                    backgroundColor = Color(0xFF101016).copy(alpha = 0.35f),
-                                    blurRadius = 24.dp,
-                                ),
-                            )
-                            .metroBlurEffect(radiusPx = 28f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF101016).copy(alpha = 0.35f))
+                            .background(Color(0xFF101016).copy(alpha = 0.65f))
                             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -790,75 +727,67 @@ fun PlayerScreen(
                             enabled = prevEpisode != null,
                             onClick = {
                                 if (prevEpisode != null && onNextEpisodeClick != null) {
-                                    saveCurrentProgress()
-                                    onNextEpisodeClick(prevEpisode)
-                                }
+                                saveCurrentProgress()
+                                onNextEpisodeClick(prevEpisode)
                             }
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Предыдущая серия",
-                                tint = if (prevEpisode != null) scheme.text else scheme.textDim.copy(alpha = 0.3f),
-                                modifier = Modifier.size(18.dp),
-                            )
                         }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = scheme.accent,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "${episode.ordinal} Серия",
-                                fontFamily = MetroFonts.headline,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp,
-                                color = scheme.text,
-                            )
-                        }
-
-                        IconButton(
-                            enabled = nextEpisode != null,
-                            onClick = {
-                                if (nextEpisode != null && onNextEpisodeClick != null) {
-                                    saveCurrentProgress()
-                                    onNextEpisodeClick(nextEpisode)
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = "Следующая серия",
-                                tint = if (nextEpisode != null) scheme.text else scheme.textDim.copy(alpha = 0.3f),
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Предыдущая серия",
+                            tint = if (prevEpisode != null) scheme.text else scheme.textDim.copy(alpha = 0.3f),
+                            modifier = Modifier.size(18.dp),
+                        )
                     }
 
-                    // RIGHT PILL: [Settings] [Lock]
                     Row(
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .hazeEffect(
-                                state = hazeState,
-                                style = HazeDefaults.style(
-                                    backgroundColor = Color(0xFF101016).copy(alpha = 0.35f),
-                                    blurRadius = 24.dp,
-                                ),
-                            )
-                            .metroBlurEffect(radiusPx = 28f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF101016).copy(alpha = 0.35f))
-                            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp),
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = scheme.accent,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "${episode.ordinal} Серия",
+                            fontFamily = MetroFonts.headline,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            color = scheme.text,
+                        )
+                    }
+
+                    IconButton(
+                        enabled = nextEpisode != null,
+                        onClick = {
+                            if (nextEpisode != null && onNextEpisodeClick != null) {
+                                saveCurrentProgress()
+                                onNextEpisodeClick(nextEpisode)
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Следующая серия",
+                            tint = if (nextEpisode != null) scheme.text else scheme.textDim.copy(alpha = 0.3f),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+
+                // RIGHT PILL: [Settings] [Lock]
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF101016).copy(alpha = 0.65f))
+                        .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                         IconButton(onClick = {
                             showSettingsDialog = !showSettingsDialog
                             showSpeedDialog = false
@@ -899,16 +828,8 @@ fun PlayerScreen(
                     Column(
                         modifier = Modifier
                             .width(260.dp)
-                            .hazeEffect(
-                                state = hazeState,
-                                style = HazeDefaults.style(
-                                    backgroundColor = Color(0xFF101016).copy(alpha = 0.45f),
-                                    blurRadius = 24.dp,
-                                ),
-                            )
-                            .metroBlurEffect(radiusPx = 28f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF101016).copy(alpha = 0.45f))
+                            .background(Color(0xFF101016).copy(alpha = 0.88f))
                             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(14.dp),
                     ) {
@@ -1002,16 +923,8 @@ fun PlayerScreen(
                     Column(
                         modifier = Modifier
                             .width(260.dp)
-                            .hazeEffect(
-                                state = hazeState,
-                                style = HazeDefaults.style(
-                                    backgroundColor = Color(0xFF101016).copy(alpha = 0.45f),
-                                    blurRadius = 24.dp,
-                                ),
-                            )
-                            .metroBlurEffect(radiusPx = 28f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF101016).copy(alpha = 0.45f))
+                            .background(Color(0xFF101016).copy(alpha = 0.88f))
                             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(14.dp),
                     ) {
@@ -1099,16 +1012,8 @@ fun PlayerScreen(
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 20.dp, vertical = 14.dp)
-                        .hazeEffect(
-                            state = hazeState,
-                            style = HazeDefaults.style(
-                                backgroundColor = Color(0xFF101016).copy(alpha = 0.38f),
-                                blurRadius = 24.dp,
-                            ),
-                        )
-                        .metroBlurEffect(radiusPx = 28f)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0xFF101016).copy(alpha = 0.38f))
+                        .background(Color(0xFF101016).copy(alpha = 0.68f))
                         .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(14.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {

@@ -191,6 +191,47 @@ class MetroSettingsRepository(private val context: Context) {
         }
     }
 
+    private fun screenSize(): Pair<Int, Int> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                val metrics = app.getSystemService(android.view.WindowManager::class.java)
+                    .currentWindowMetrics.bounds
+                metrics.width() to metrics.height()
+            } catch (_: Exception) {
+                fallbackSize()
+            }
+        } else {
+            fallbackSize()
+        }
+    }
+
+    private fun fallbackSize(): Pair<Int, Int> {
+        val dm = app.resources.displayMetrics
+        return dm.widthPixels to dm.heightPixels
+    }
+
+    private fun centerCrop(src: Bitmap, sw: Int, sh: Int): Bitmap? {
+        return try {
+            if (src.width == sw && src.height == sh) return src
+            val scale = maxOf(sw / src.width.toFloat(), sh / src.height.toFloat())
+            val dw = Math.round(src.width * scale)
+            val dh = Math.round(src.height * scale)
+            val scaled = Bitmap.createScaledBitmap(src, dw, dh, true)
+            val x = ((dw - sw) / 2).coerceAtLeast(0)
+            val y = ((dh - sh) / 2).coerceAtLeast(0)
+            val result = Bitmap.createBitmap(
+                scaled, x, y, sw.coerceAtMost(dw - x), sh.coerceAtMost(dh - y),
+            )
+            if (result !== scaled) {
+                scaled.recycle()
+            }
+            if (result !== src) src.recycle()
+            result
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     fun reloadWallpaper() {
         scope.launch(Dispatchers.IO) {
             val file = wallpaperFile()
@@ -199,21 +240,9 @@ class MetroSettingsRepository(private val context: Context) {
                 return@launch
             }
             try {
-                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeFile(file.absolutePath, opts)
-                val sw = 720
-                val sh = 1280
-                var sampleSize = 1
-                while (opts.outWidth / (sampleSize * 2) >= sw && opts.outHeight / (sampleSize * 2) >= sh) {
-                    sampleSize *= 2
-                }
-                val decodeOpts = BitmapFactory.Options().apply {
-                    inSampleSize = sampleSize
-                    inPreferredConfig = Bitmap.Config.ARGB_8888
-                }
-                val rawBitmap = BitmapFactory.decodeFile(file.absolutePath, decodeOpts) ?: return@launch
-                val scaledSharp = Bitmap.createScaledBitmap(rawBitmap, sw, sh, true)
-                if (scaledSharp !== rawBitmap) rawBitmap.recycle()
+                val (sw, sh) = screenSize()
+                val rawBitmap = BitmapFactory.decodeFile(file.absolutePath) ?: return@launch
+                val scaledSharp = centerCrop(rawBitmap, sw, sh) ?: return@launch
 
                 // Extract wallpaper palette
                 val palette = ColorPaletteExtractor.extractPalette(scaledSharp, limit = 8)
