@@ -180,6 +180,23 @@ class MetroSettingsRepository(private val context: Context) {
         }
     }
 
+    suspend fun restoreSettings(newSettings: AnimeSettings) {
+        app.animeSettingsStore.edit { prefs ->
+            prefs[KEY_ACCENT] = newSettings.accentColor
+            prefs[KEY_BLUR_ENABLED] = newSettings.blurEnabled
+            prefs[KEY_BLUR_RADIUS] = newSettings.blurRadius
+            prefs[KEY_BG_DIM] = newSettings.backgroundDim
+            prefs[KEY_HAS_WALLPAPER] = newSettings.hasCustomWallpaper
+            if (newSettings.wallpaperPalette.isNotEmpty()) {
+                prefs[KEY_WALLPAPER_PALETTE] = newSettings.wallpaperPalette.joinToString(",") { it.toString() }
+            } else {
+                prefs.remove(KEY_WALLPAPER_PALETTE)
+            }
+            prefs[KEY_AUTO_UPDATE_INTERVAL] = newSettings.autoUpdateIntervalMinutes
+            prefs[KEY_LAST_NOTIFIED_VERSION] = newSettings.lastNotifiedVersion
+        }
+    }
+
     private fun wallpaperFile(): File = File(app.filesDir, "anime_wallpaper.jpg")
 
     fun setCustomWallpaper(uri: Uri) {

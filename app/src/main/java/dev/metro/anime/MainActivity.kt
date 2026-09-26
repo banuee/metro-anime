@@ -166,6 +166,7 @@ class MainActivity : ComponentActivity() {
                                 SettingsScreen(
                                     settingsRepo = settingsRepository,
                                     updateRepo = updateRepository,
+                                    animeRepo = repository,
                                     onBackClick = {
                                         currentScreen = Screen.Home
                                     },

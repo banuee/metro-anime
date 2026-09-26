@@ -242,6 +242,7 @@ fun MetroButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     isPrimary: Boolean = true,
+    enabled: Boolean = true,
 ) {
     val scheme = LocalMetroScheme.current
     val bg = if (isPrimary) scheme.accent else scheme.glassHover
@@ -250,9 +251,9 @@ fun MetroButton(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-            .background(bg)
-            .border(MetroDimens.strokeWidth, border, RoundedCornerShape(MetroDimens.radiusSmall))
-            .metroClickable(onClick = onClick)
+            .background(if (enabled) bg else bg.copy(alpha = 0.4f))
+            .border(MetroDimens.strokeWidth, if (enabled) border else border.copy(alpha = 0.3f), RoundedCornerShape(MetroDimens.radiusSmall))
+            .metroClickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -262,7 +263,7 @@ fun MetroButton(
             fontWeight = FontWeight.SemiBold,
             fontSize = 13.sp,
             letterSpacing = 1.sp,
-            color = Color.White,
+            color = if (enabled) Color.White else Color.White.copy(alpha = 0.4f),
         )
     }
 }

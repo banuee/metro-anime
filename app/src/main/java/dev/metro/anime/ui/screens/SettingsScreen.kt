@@ -38,13 +38,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.metro.anime.BuildConfig
+import dev.metro.anime.data.AnimeBackupRepository
 import dev.metro.anime.data.AutoUpdateManager
 import dev.metro.anime.data.AutoUpdateNotificationHelper
 import dev.metro.anime.data.ReleaseInfo
 import dev.metro.anime.data.UpdateRepository
 import dev.metro.anime.data.UpdateState
+import dev.metro.anime.data.repository.AnimeRepository
 import dev.metro.anime.data.settings.MetroSettingsRepository
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import dev.metro.anime.ui.components.MetroButton
 import dev.metro.anime.ui.components.MetroIconButton
 import dev.metro.anime.ui.components.MetroTopBar
@@ -59,6 +64,7 @@ import kotlin.math.roundToInt
 fun SettingsScreen(
     settingsRepo: MetroSettingsRepository,
     updateRepo: UpdateRepository,
+    animeRepo: AnimeRepository,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -104,6 +110,44 @@ fun SettingsScreen(
     ) { uri ->
         if (uri != null) {
             settingsRepo.setCustomWallpaper(uri)
+        }
+    }
+
+    var backupStatus by remember { mutableStateOf<String?>(null) }
+    var backupError by remember { mutableStateOf(false) }
+    var backupWorking by remember { mutableStateOf(false) }
+
+    val backupRepo = remember { AnimeBackupRepository(context) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri != null) {
+            backupWorking = true
+            backupStatus = "Экспорт данных..."
+            backupError = false
+            scope.launch {
+                val res = backupRepo.exportBackup(uri, settingsRepo, animeRepo)
+                backupWorking = false
+                backupError = !res.success
+                backupStatus = res.message ?: if (res.success) "Резервная копия успешно создана" else "Ошибка экспорта"
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            backupWorking = true
+            backupStatus = "Восстановление данных..."
+            backupError = false
+            scope.launch {
+                val res = backupRepo.importBackup(uri, settingsRepo, animeRepo)
+                backupWorking = false
+                backupError = !res.success
+                backupStatus = res.message ?: if (res.success) "Данные успешно восстановлены" else "Ошибка импорта"
+            }
         }
     }
 
@@ -890,6 +934,84 @@ fun SettingsScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // =================================================================
+            // Backup and Restore Section
+            // =================================================================
+            item {
+                Text(
+                    text = "РЕЗЕРВНАЯ КОПИЯ И ЭКСПОРТ",
+                    fontFamily = MetroFonts.headline,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.2.sp,
+                    color = scheme.textDim,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(MetroDimens.radius))
+                        .background(scheme.glass)
+                        .border(1.dp, scheme.stroke, RoundedCornerShape(MetroDimens.radius))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    if (backupStatus != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                                .background(if (backupError) scheme.red.copy(alpha = 0.15f) else scheme.accent.copy(alpha = 0.15f))
+                                .border(1.dp, if (backupError) scheme.red.copy(alpha = 0.5f) else scheme.accent.copy(alpha = 0.5f), RoundedCornerShape(MetroDimens.radiusSmall))
+                                .padding(12.dp),
+                        ) {
+                            Text(
+                                text = backupStatus ?: "",
+                                color = if (backupError) scheme.red else scheme.accent,
+                                fontSize = 13.sp,
+                                fontFamily = MetroFonts.text,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Экспорт и импорт всех настроек, фоновых обоев, закладок избранного и полной истории просмотров с прогрессом серий в один портативный файл .json.",
+                        color = scheme.textDim,
+                        fontSize = 12.sp,
+                        fontFamily = MetroFonts.text,
+                        lineHeight = 16.sp,
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        MetroButton(
+                            text = "Экспорт",
+                            isPrimary = true,
+                            enabled = !backupWorking,
+                            onClick = {
+                                val dateStr = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+                                exportLauncher.launch("metro-anime-backup-$dateStr.json")
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+
+                        MetroButton(
+                            text = "Импорт",
+                            isPrimary = false,
+                            enabled = !backupWorking,
+                            onClick = {
+                                importLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                 }
             }

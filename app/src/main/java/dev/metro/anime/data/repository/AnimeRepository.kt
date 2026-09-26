@@ -205,5 +205,18 @@ class AnimeRepository(context: Context) {
         _history.value = current
         prefs.edit().putString("watch_history", gson.toJson(current)).apply()
     }
+
+    fun getAllBookmarks(): List<AnimeTitle> = _bookmarks.value
+
+    fun getAllHistory(): List<WatchProgress> = _history.value
+
+    fun restoreData(bookmarks: List<AnimeTitle>, history: List<WatchProgress>) {
+        _bookmarks.value = bookmarks
+        _history.value = history
+        prefs.edit()
+            .putString("bookmarks", gson.toJson(bookmarks))
+            .putString("watch_history", gson.toJson(history))
+            .apply()
+    }
 }
 
