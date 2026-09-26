@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -52,6 +53,7 @@ enum class HomeTab(val label: String) {
 fun HomeScreen(
     repository: AnimeRepository,
     onAnimeClick: (AnimeTitle) -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scheme = LocalMetroScheme.current
@@ -121,6 +123,13 @@ fun HomeScreen(
         MetroHeader(
             title = "Metro Anime",
             subtitle = "Чистый просмотр без рекламы",
+            trailingAction = {
+                MetroIconButton(
+                    icon = Icons.Default.Settings,
+                    contentDescription = "Параметры",
+                    onClick = onOpenSettings,
+                )
+            },
         )
 
         Spacer(modifier = Modifier.height(16.dp))

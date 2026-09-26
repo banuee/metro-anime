@@ -51,6 +51,8 @@ fun DetailsScreen(
     var details by remember { mutableStateOf<AnimeDetails?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedDubIndex by remember { mutableIntStateOf(0) }
+    var isAscending by remember { mutableStateOf(true) }
+    var selectedRangeIndex by remember { mutableIntStateOf(0) }
     val isBookmarked by remember {
         derivedStateOf { repository.isBookmarked(anime.id) }
     }
@@ -340,7 +342,10 @@ fun DetailsScreen(
                                     MetroChip(
                                         text = dub.title,
                                         isSelected = idx == selectedDubIndex,
-                                        onClick = { selectedDubIndex = idx },
+                                        onClick = {
+                                            selectedDubIndex = idx
+                                            selectedRangeIndex = 0
+                                        },
                                     )
                                 }
                             }
@@ -349,6 +354,19 @@ fun DetailsScreen(
                 }
 
                 // Episodes Section
+                val sortedEpisodes = if (isAscending) episodes.sortedBy { it.ordinal } else episodes.sortedByDescending { it.ordinal }
+                val hasManyEpisodes = episodes.size > 50
+                val rangeChunkSize = 50
+                val totalRanges = if (hasManyEpisodes) (episodes.size + rangeChunkSize - 1) / rangeChunkSize else 0
+
+                val displayedEpisodes = if (!hasManyEpisodes || selectedRangeIndex == 0) {
+                    sortedEpisodes
+                } else {
+                    val start = (selectedRangeIndex - 1) * rangeChunkSize
+                    val end = minOf(start + rangeChunkSize, sortedEpisodes.size)
+                    if (start < sortedEpisodes.size) sortedEpisodes.subList(start, end) else sortedEpisodes
+                }
+
                 item {
                     Spacer(modifier = Modifier.height(20.dp))
                     Row(
@@ -366,6 +384,49 @@ fun DetailsScreen(
                             letterSpacing = 1.2.sp,
                             color = scheme.text,
                         )
+
+                        // Order toggle button
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                                .background(scheme.glass)
+                                .border(1.dp, scheme.stroke, RoundedCornerShape(MetroDimens.radiusSmall))
+                                .metroClickable { isAscending = !isAscending }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            Text(
+                                text = if (isAscending) "1 → ${episodes.size}" else "${episodes.size} → 1",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = scheme.accent,
+                            )
+                        }
+                    }
+
+                    if (hasManyEpisodes) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            item {
+                                MetroChip(
+                                    text = "Все",
+                                    isSelected = selectedRangeIndex == 0,
+                                    onClick = { selectedRangeIndex = 0 },
+                                )
+                            }
+                            items(totalRanges) { rIdx ->
+                                val rStart = rIdx * rangeChunkSize + 1
+                                val rEnd = minOf((rIdx + 1) * rangeChunkSize, episodes.size)
+                                MetroChip(
+                                    text = "$rStart–$rEnd",
+                                    isSelected = selectedRangeIndex == rIdx + 1,
+                                    onClick = { selectedRangeIndex = rIdx + 1 },
+                                )
+                            }
+                        }
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                 }
@@ -387,7 +448,7 @@ fun DetailsScreen(
                         }
                     }
                 } else {
-                    items(episodes, key = { it.ordinal }) { episode ->
+                    items(displayedEpisodes, key = { "${it.ordinal}_${it.name ?: ""}" }) { episode ->
                         EpisodeItemRow(
                             episode = episode,
                             watchProgress = watchProgress,

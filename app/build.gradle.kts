@@ -1,6 +1,12 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+val localProps = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
 
 android {
@@ -16,12 +22,30 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val keyFile = file(
+                localProps.getProperty("metro.storeFile")
+                    ?: "${System.getProperty("user.home")}/.config/metro-launcher/metro-release.keystore"
+            )
+            if (keyFile.exists()) {
+                storeFile = keyFile
+                storePassword = localProps.getProperty("metro.storePassword") ?: "metro1234"
+                keyAlias = localProps.getProperty("metro.keyAlias") ?: "metro"
+                keyPassword = localProps.getProperty("metro.keyPassword") ?: "metro1234"
+            } else {
+                initWith(getByName("debug"))
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
         }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

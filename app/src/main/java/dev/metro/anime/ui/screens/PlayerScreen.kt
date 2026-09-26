@@ -3,25 +3,20 @@ package dev.metro.anime.ui.screens
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.net.Uri
-import android.view.ViewGroup
-import android.widget.FrameLayout
+import android.view.WindowManager
 import androidx.annotation.OptIn
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,15 +24,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import dev.metro.anime.data.model.AnimeEpisode
 import dev.metro.anime.data.model.AnimeSource
@@ -45,13 +45,13 @@ import dev.metro.anime.data.model.AnimeTitle
 import dev.metro.anime.data.repository.AnimeRepository
 import dev.metro.anime.ui.components.MetroButton
 import dev.metro.anime.ui.components.MetroChip
-import dev.metro.anime.ui.components.MetroIconButton
 import dev.metro.anime.ui.theme.LocalMetroScheme
 import dev.metro.anime.ui.theme.MetroDimens
 import dev.metro.anime.ui.theme.MetroFonts
 import dev.metro.anime.ui.theme.metroClickable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withTimeoutOrNull
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -82,11 +82,28 @@ fun PlayerScreen(
     var isBuffering by remember { mutableStateOf(false) }
     var isPlaybackEnded by remember { mutableStateOf(false) }
 
-    var hasRestoredInitialPosition by remember(episode) { mutableStateOf(false) }
+    var baseSpeed by remember { mutableFloatStateOf(1.0f) }
+    var isHoldingLeft by remember { mutableStateOf(false) }
+    var isHoldingRight by remember { mutableStateOf(false) }
+
+    var isMuted by remember { mutableStateOf(false) }
+    var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var isControlsLocked by remember { mutableStateOf(false) }
+
+    var showSpeedDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+
+    var seekIndicatorText by remember { mutableStateOf<String?>(null) }
+    var seekIndicatorSide by remember { mutableStateOf(0) } // -1 left, +1 right
 
     val nextEpisode = remember(episode, allEpisodes) {
         allEpisodes.find { it.ordinal == episode.ordinal + 1 }
     }
+    val prevEpisode = remember(episode, allEpisodes) {
+        allEpisodes.find { it.ordinal == episode.ordinal - 1 }
+    }
+
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
 
     fun saveCurrentProgress() {
         if (currentPositionMs > 3000L && durationMs > 10000L) {
@@ -104,13 +121,24 @@ fun PlayerScreen(
         }
     }
 
-    // Lock orientation to sensor landscape while player is open
+    // Fullscreen Immersive Mode & Landscape Orientation
     DisposableEffect(Unit) {
         val activity = context as? Activity
         val origOrientation = activity?.requestedOrientation
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        val window = activity?.window
+        val insetsController = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
+        insetsController?.apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+
         onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             activity?.requestedOrientation = origOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            insetsController?.show(WindowInsetsCompat.Type.systemBars())
         }
     }
 
@@ -129,14 +157,14 @@ fun PlayerScreen(
                 override fun onIsPlayingChanged(playing: Boolean) {
                     isPlaying = playing
                 }
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    isBuffering = playbackState == Player.STATE_BUFFERING
-                    isPlaybackEnded = playbackState == Player.STATE_ENDED
-                    if (playbackState == Player.STATE_READY) {
+
+                override fun onPlaybackStateChanged(state: Int) {
+                    isBuffering = (state == Player.STATE_BUFFERING)
+                    isPlaybackEnded = (state == Player.STATE_ENDED)
+                    if (state == Player.STATE_READY) {
                         durationMs = duration.coerceAtLeast(0L)
-                        if (!hasRestoredInitialPosition && initialPositionMs > 2000L) {
+                        if (initialPositionMs > 0 && currentPosition == 0L) {
                             seekTo(initialPositionMs)
-                            hasRestoredInitialPosition = true
                         }
                     }
                 }
@@ -168,23 +196,22 @@ fun PlayerScreen(
         }
     }
 
-    // Feed URL to ExoPlayer on quality / stream change
+    // Feed URL to ExoPlayer
     LaunchedEffect(streams, selectedQuality) {
         val streamUrl = streams[selectedQuality] ?: streams.values.firstOrNull()
         if (streamUrl != null) {
             val mediaItem = MediaItem.fromUri(Uri.parse(streamUrl))
-            val curPos = exoPlayer.currentPosition
             exoPlayer.setMediaItem(mediaItem)
             exoPlayer.prepare()
-            if (curPos > 0) {
-                exoPlayer.seekTo(curPos)
+            if (initialPositionMs > 0) {
+                exoPlayer.seekTo(initialPositionMs)
             }
             exoPlayer.play()
         }
     }
 
-    // Periodic timecode poll & auto-save progress
-    LaunchedEffect(exoPlayer, episode) {
+    // Position tracking loop
+    LaunchedEffect(exoPlayer) {
         var lastSavedSec = 0L
         while (isActive) {
             val cur = exoPlayer.currentPosition.coerceAtLeast(0L)
@@ -201,14 +228,15 @@ fun PlayerScreen(
         }
     }
 
-    // Auto-hide controls
-    LaunchedEffect(showControls, isPlaying) {
-        if (showControls && isPlaying) {
+    // Auto-hide controls after 5 seconds
+    LaunchedEffect(showControls, isPlaying, showSpeedDialog, showSettingsDialog) {
+        if (showControls && isPlaying && !showSpeedDialog && !showSettingsDialog) {
             delay(5000)
             showControls = false
         }
     }
 
+    // Cleanup on exit
     DisposableEffect(Unit) {
         onDispose {
             saveCurrentProgress()
@@ -216,12 +244,13 @@ fun PlayerScreen(
         }
     }
 
+    // Main Box
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        // Video View with TextureView to avoid emulator green screen
+        // Video View
         AndroidView(
             factory = { ctx ->
                 val view = android.view.LayoutInflater.from(ctx)
@@ -231,12 +260,193 @@ fun PlayerScreen(
                     useController = false
                     isClickable = false
                     isFocusable = false
+                    this.resizeMode = resizeMode
                 }
+                playerViewRef = view
+                view
+            },
+            update = { view ->
+                view.resizeMode = resizeMode
             },
             modifier = Modifier.fillMaxSize(),
         )
 
-        // Buffering Indicator
+        // =====================================================================
+        // Gesture Layer: Left Half (Rewind 10s & 1.5x speed hold)
+        // =====================================================================
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .pointerInput(baseSpeed, isControlsLocked) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
+                                exoPlayer.seekTo(target)
+                                seekIndicatorText = "-10 сек"
+                                seekIndicatorSide = -1
+                            },
+                            onTap = {
+                                if (!isControlsLocked) {
+                                    showControls = !showControls
+                                    showSpeedDialog = false
+                                    showSettingsDialog = false
+                                }
+                            },
+                            onPress = {
+                                val released = withTimeoutOrNull(250) {
+                                    tryAwaitRelease()
+                                }
+                                if (released == null && !isControlsLocked) {
+                                    isHoldingLeft = true
+                                    exoPlayer.setPlaybackSpeed(1.5f)
+                                    tryAwaitRelease()
+                                    isHoldingLeft = false
+                                    exoPlayer.setPlaybackSpeed(baseSpeed)
+                                }
+                            }
+                        )
+                    }
+            )
+
+            // Right Half (Forward 10s & 2.0x speed hold)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .pointerInput(baseSpeed, isControlsLocked) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(durationMs)
+                                exoPlayer.seekTo(target)
+                                seekIndicatorText = "+10 сек"
+                                seekIndicatorSide = 1
+                            },
+                            onTap = {
+                                if (!isControlsLocked) {
+                                    showControls = !showControls
+                                    showSpeedDialog = false
+                                    showSettingsDialog = false
+                                }
+                            },
+                            onPress = {
+                                val released = withTimeoutOrNull(250) {
+                                    tryAwaitRelease()
+                                }
+                                if (released == null && !isControlsLocked) {
+                                    isHoldingRight = true
+                                    exoPlayer.setPlaybackSpeed(2.0f)
+                                    tryAwaitRelease()
+                                    isHoldingRight = false
+                                    exoPlayer.setPlaybackSpeed(baseSpeed)
+                                }
+                            }
+                        )
+                    }
+            )
+        }
+
+        // =====================================================================
+        // HUD: Speed Hold Banner (1.5x / 2.0x)
+        // =====================================================================
+        AnimatedVisibility(
+            visible = isHoldingLeft || isHoldingRight,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 28.dp),
+        ) {
+            val boost = if (isHoldingLeft) "1.5x" else "2.0x"
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                    .background(Color(0xFF141418).copy(alpha = 0.85f))
+                    .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = "УСКОРЕНИЕ $boost",
+                        fontFamily = MetroFonts.headline,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = scheme.accent,
+                    )
+                    Icon(
+                        imageVector = Icons.Default.FastForward,
+                        contentDescription = null,
+                        tint = scheme.accent,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+
+        // =====================================================================
+        // HUD: Seek Indicator (-10s / +10s)
+        // =====================================================================
+        LaunchedEffect(seekIndicatorText) {
+            if (seekIndicatorText != null) {
+                delay(700)
+                seekIndicatorText = null
+            }
+        }
+        AnimatedVisibility(
+            visible = seekIndicatorText != null,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier.align(
+                if (seekIndicatorSide < 0) Alignment.CenterStart else Alignment.CenterEnd
+            ).padding(horizontal = 48.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MetroDimens.radius))
+                    .background(Color(0xFF141418).copy(alpha = 0.82f))
+                    .border(1.dp, scheme.accent.copy(alpha = 0.6f), RoundedCornerShape(MetroDimens.radius))
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (seekIndicatorSide < 0) {
+                        Icon(
+                            imageVector = Icons.Default.FastRewind,
+                            contentDescription = null,
+                            tint = scheme.text,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                    Text(
+                        text = seekIndicatorText ?: "",
+                        fontFamily = MetroFonts.headline,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = scheme.text,
+                    )
+                    if (seekIndicatorSide > 0) {
+                        Icon(
+                            imageVector = Icons.Default.FastForward,
+                            contentDescription = null,
+                            tint = scheme.text,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+            }
+        }
+
+        // =====================================================================
+        // Buffering / Loading
+        // =====================================================================
         if (isBuffering || isResolvingStreams) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -249,12 +459,14 @@ fun PlayerScreen(
             }
         }
 
-        // Resolving Error
+        // =====================================================================
+        // Error Overlay
+        // =====================================================================
         if (resolveError != null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.85f)),
+                    .background(Color.Black.copy(alpha = 0.88f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -273,7 +485,9 @@ fun PlayerScreen(
             }
         }
 
+        // =====================================================================
         // Skip Opening / Ending Button
+        // =====================================================================
         val curSec = (currentPositionMs / 1000).toInt()
         val op = episode.opening
         val ed = episode.ending
@@ -288,87 +502,72 @@ fun PlayerScreen(
             else -> null
         }
 
-        // Fullscreen touch interceptor over PlayerView when controls are hidden
-        if (!showControls) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) {
-                        showControls = true
-                    }
-            )
-        }
-
         AnimatedVisibility(
-            visible = showSkip && skipTargetSec != null,
+            visible = showSkip && skipTargetSec != null && !isControlsLocked,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(bottom = 76.dp, end = 24.dp),
         ) {
             if (skipTargetSec != null) {
-                MetroButton(
-                    text = "Пропустить заставку",
-                    onClick = {
-                        exoPlayer.seekTo(skipTargetSec * 1000L)
-                    },
-                )
-            }
-        }
-
-        // End of Episode Dialog / Card
-        if (isPlaybackEnded && nextEpisode != null && onNextEpisodeClick != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.88f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(MetroDimens.radius))
-                        .background(scheme.glassDeep)
-                        .border(1.dp, scheme.strokeStrong, RoundedCornerShape(MetroDimens.radius))
-                        .padding(24.dp),
+                        .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                        .background(Color(0xFF141418).copy(alpha = 0.85f))
+                        .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
+                        .metroClickable {
+                            exoPlayer.seekTo(skipTargetSec * 1000L)
+                        }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                 ) {
-                    Text(
-                        text = "Серия ${episode.ordinal} завершена",
-                        fontFamily = MetroFonts.headline,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = scheme.text,
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Следующая: Серия ${nextEpisode.ordinal}",
-                        fontFamily = MetroFonts.text,
-                        fontSize = 13.sp,
-                        color = scheme.textDim,
-                    )
-                    Spacer(modifier = Modifier.height(18.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MetroButton(
-                            text = "Назад",
-                            onClick = onBackClick,
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Пропустить заставку",
+                            fontFamily = MetroFonts.headline,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = scheme.accent,
                         )
-                        MetroButton(
-                            text = "Включить след. серию",
-                            onClick = {
-                                saveCurrentProgress()
-                                onNextEpisodeClick(nextEpisode)
-                            },
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Default.FastForward,
+                            contentDescription = null,
+                            tint = scheme.accent,
+                            modifier = Modifier.size(16.dp),
                         )
                     }
                 }
             }
         }
 
-        // Metro Acrylic Controls Overlay
+        // =====================================================================
+        // Lock Screen Unlock Button (When controls are locked)
+        // =====================================================================
+        if (isControlsLocked) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 18.dp, end = 20.dp)
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF141418).copy(alpha = 0.75f))
+                    .border(1.dp, scheme.accent, RoundedCornerShape(10.dp))
+                    .metroClickable { isControlsLocked = false },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = "Разблокировать",
+                    tint = scheme.accent,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+
+        // =====================================================================
+        // Metro Acrylic Controls Overlay (Top Pills + Bottom Dock)
+        // =====================================================================
         AnimatedVisibility(
-            visible = showControls,
+            visible = showControls && !isControlsLocked,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize(),
@@ -376,170 +575,408 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) {
-                        showControls = false
-                    }
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.70f),
+                                Color.Black.copy(alpha = 0.65f),
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.85f),
+                                Color.Black.copy(alpha = 0.80f),
                             ),
                         )
                     )
             ) {
-                // Top Bar
+                // -------------------------------------------------------------
+                // TOP BAR: 3 Acrylic Pills
+                // -------------------------------------------------------------
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    MetroIconButton(
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Назад",
-                        onClick = onBackClick,
-                    )
+                    // LEFT PILL: [Back] [Mute] [Speed] [Aspect]
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF141418).copy(alpha = 0.78f))
+                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = onBackClick) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Назад",
+                                tint = scheme.text,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
 
-                    Spacer(modifier = Modifier.width(16.dp))
+                        IconButton(onClick = {
+                            isMuted = !isMuted
+                            exoPlayer.volume = if (isMuted) 0f else 1f
+                        }) {
+                            Icon(
+                                imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                contentDescription = "Звук",
+                                tint = if (isMuted) scheme.red else scheme.text,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = anime.titleRu,
-                            fontFamily = MetroFonts.headline,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                            color = scheme.text,
-                            maxLines = 1,
+                        IconButton(onClick = {
+                            showSpeedDialog = !showSpeedDialog
+                            showSettingsDialog = false
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Speed,
+                                contentDescription = "Скорость",
+                                tint = if (baseSpeed != 1.0f) scheme.accent else scheme.text,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+
+                        IconButton(onClick = {
+                            resizeMode = when (resizeMode) {
+                                AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                                else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                            }
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.AspectRatio,
+                                contentDescription = "Масштаб",
+                                tint = if (resizeMode != AspectRatioFrameLayout.RESIZE_MODE_FIT) scheme.accent else scheme.text,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+
+                    // CENTER PILL: [<] [🎬 24 Серия] [>]
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF141418).copy(alpha = 0.78f))
+                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(
+                            enabled = prevEpisode != null,
+                            onClick = {
+                                if (prevEpisode != null && onNextEpisodeClick != null) {
+                                    saveCurrentProgress()
+                                    onNextEpisodeClick(prevEpisode)
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Предыдущая серия",
+                                tint = if (prevEpisode != null) scheme.text else scheme.textDim.copy(alpha = 0.3f),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = scheme.accent,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "${episode.ordinal} Серия",
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = scheme.text,
+                            )
+                        }
+
+                        IconButton(
+                            enabled = nextEpisode != null,
+                            onClick = {
+                                if (nextEpisode != null && onNextEpisodeClick != null) {
+                                    saveCurrentProgress()
+                                    onNextEpisodeClick(nextEpisode)
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "Следующая серия",
+                                tint = if (nextEpisode != null) scheme.text else scheme.textDim.copy(alpha = 0.3f),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+
+                    // RIGHT PILL: [Settings] [Lock]
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF141418).copy(alpha = 0.78f))
+                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = {
+                            showSettingsDialog = !showSettingsDialog
+                            showSpeedDialog = false
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Параметры",
+                                tint = scheme.text,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+
+                        IconButton(onClick = {
+                            isControlsLocked = true
+                            showControls = false
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.LockOpen,
+                                contentDescription = "Заблокировать",
+                                tint = scheme.text,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+
+                // -------------------------------------------------------------
+                // Speed Popup Card (Under left pill)
+                // -------------------------------------------------------------
+                AnimatedVisibility(
+                    visible = showSpeedDialog,
+                    enter = fadeIn() + slideInVertically(),
+                    exit = fadeOut() + slideOutVertically(),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = 64.dp, start = 20.dp),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .width(260.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF141418).copy(alpha = 0.90f))
+                            .border(1.dp, scheme.strokeStrong, RoundedCornerShape(12.dp))
+                            .padding(14.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Скорость воспроизведения",
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = scheme.text,
+                            )
+                            Text(
+                                text = "${baseSpeed}x",
+                                fontFamily = MetroFonts.text,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = scheme.accent,
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Slider(
+                            value = baseSpeed,
+                            onValueChange = {
+                                val snapped = when {
+                                    it < 0.65f -> 0.5f
+                                    it < 0.88f -> 0.75f
+                                    it < 1.15f -> 1.0f
+                                    it < 1.38f -> 1.25f
+                                    it < 1.65f -> 1.5f
+                                    it < 1.88f -> 1.75f
+                                    else -> 2.0f
+                                }
+                                baseSpeed = snapped
+                                exoPlayer.setPlaybackSpeed(snapped)
+                            },
+                            valueRange = 0.5f..2.0f,
+                            steps = 5,
+                            colors = SliderDefaults.colors(
+                                thumbColor = scheme.accent,
+                                activeTrackColor = scheme.accent,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.15f),
+                            ),
                         )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            listOf(0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { spd ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (baseSpeed == spd) scheme.accent else scheme.glass)
+                                        .metroClickable {
+                                            baseSpeed = spd
+                                            exoPlayer.setPlaybackSpeed(spd)
+                                        }
+                                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                                ) {
+                                    Text(
+                                        text = "${spd}x",
+                                        fontFamily = MetroFonts.text,
+                                        fontSize = 11.sp,
+                                        color = if (baseSpeed == spd) Color.White else scheme.textDim,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // -------------------------------------------------------------
+                // Settings Popup Card (Under right pill)
+                // -------------------------------------------------------------
+                AnimatedVisibility(
+                    visible = showSettingsDialog,
+                    enter = fadeIn() + slideInVertically(),
+                    exit = fadeOut() + slideOutVertically(),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 64.dp, end = 20.dp),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .width(260.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF141418).copy(alpha = 0.92f))
+                            .border(1.dp, scheme.strokeStrong, RoundedCornerShape(12.dp))
+                            .padding(14.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Параметры видео",
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = scheme.text,
+                            )
+                            IconButton(
+                                onClick = { showSettingsDialog = false },
+                                modifier = Modifier.size(20.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Закрыть",
+                                    tint = scheme.textDim,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
                         Text(
-                            text = "Серия ${episode.ordinal}${if (!episode.name.isNullOrBlank()) ": ${episode.name}" else ""}",
+                            text = "Качество видео:",
+                            fontFamily = MetroFonts.text,
+                            fontSize = 11.sp,
+                            color = scheme.textDim,
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            streams.keys.sortedDescending().forEach { q ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (selectedQuality == q) scheme.accent else scheme.glass)
+                                        .border(1.dp, if (selectedQuality == q) scheme.accent else scheme.stroke, RoundedCornerShape(6.dp))
+                                        .metroClickable { selectedQuality = q }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                ) {
+                                    Text(
+                                        text = "${q}p",
+                                        fontFamily = MetroFonts.headline,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.sp,
+                                        color = if (selectedQuality == q) Color.White else scheme.text,
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = "Источник: ${source.label}",
                             fontFamily = MetroFonts.text,
                             fontSize = 12.sp,
                             color = scheme.textDim,
-                            maxLines = 1,
                         )
-                    }
-
-                    // Quality Selector Chips
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        streams.keys.sortedDescending().forEach { q ->
-                            MetroChip(
-                                text = "${q}p",
-                                isSelected = selectedQuality == q,
-                                onClick = { selectedQuality = q },
+                        if (dubbingTitle.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Озвучка: $dubbingTitle",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 11.sp,
+                                color = scheme.textDim,
+                                maxLines = 1,
                             )
                         }
                     }
                 }
 
-                // Center Controls (Rewind, Play/Pause, Forward)
-                Row(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalArrangement = Arrangement.spacedBy(36.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Rewind 10s
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                            .background(scheme.glassDeep)
-                            .border(1.dp, scheme.stroke, RoundedCornerShape(MetroDimens.radiusSmall))
-                            .metroClickable {
-                                exoPlayer.seekTo((exoPlayer.currentPosition - 10000).coerceAtLeast(0))
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FastRewind,
-                            contentDescription = "Назад 10 сек",
-                            tint = scheme.text,
-                            modifier = Modifier.size(24.dp),
-                        )
-                    }
-
-                    // Play / Pause
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(RoundedCornerShape(MetroDimens.radius))
-                            .background(scheme.accent)
-                            .border(1.5.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(MetroDimens.radius))
-                            .metroClickable {
-                                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Пауза" else "Играть",
-                            tint = Color.White,
-                            modifier = Modifier.size(36.dp),
-                        )
-                    }
-
-                    // Forward 10s
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                            .background(scheme.glassDeep)
-                            .border(1.dp, scheme.stroke, RoundedCornerShape(MetroDimens.radiusSmall))
-                            .metroClickable {
-                                exoPlayer.seekTo((exoPlayer.currentPosition + 10000).coerceAtMost(exoPlayer.duration))
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FastForward,
-                            contentDescription = "Вперед 10 сек",
-                            tint = scheme.text,
-                            modifier = Modifier.size(24.dp),
-                        )
-                    }
-
-                    // Next Episode (if available)
-                    if (nextEpisode != null && onNextEpisodeClick != null) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                                .background(scheme.glassDeep)
-                                .border(1.dp, scheme.stroke, RoundedCornerShape(MetroDimens.radiusSmall))
-                                .metroClickable {
-                                    saveCurrentProgress()
-                                    onNextEpisodeClick(nextEpisode)
-                                },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipNext,
-                                contentDescription = "Следующая серия",
-                                tint = scheme.text,
-                                modifier = Modifier.size(24.dp),
-                            )
-                        }
-                    }
-                }
-
-                // Bottom Bar (Progress + Timestamps + Next)
-                Column(
+                // -------------------------------------------------------------
+                // BOTTOM DOCK: [Play/Pause] [00:00] [====Slider====] [23:51] [Aspect]
+                // -------------------------------------------------------------
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
-                        .padding(horizontal = 24.dp, vertical = 14.dp),
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF141418).copy(alpha = 0.82f))
+                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        // Play / Pause Button
+                        IconButton(
+                            onClick = {
+                                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "Пауза" else "Играть",
+                                tint = scheme.accent,
+                                modifier = Modifier.size(26.dp),
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        // Current Time
                         Text(
                             text = formatTime(currentPositionMs),
                             fontFamily = MetroFonts.text,
@@ -547,27 +984,53 @@ fun PlayerScreen(
                             color = scheme.text,
                         )
 
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Progress Seekbar
+                        Slider(
+                            value = if (durationMs > 0) currentPositionMs.toFloat() / durationMs.toFloat() else 0f,
+                            onValueChange = { fraction ->
+                                val target = (fraction * durationMs).toLong()
+                                exoPlayer.seekTo(target)
+                            },
+                            colors = SliderDefaults.colors(
+                                thumbColor = scheme.accent,
+                                activeTrackColor = scheme.accent,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.15f),
+                            ),
+                            modifier = Modifier.weight(1f),
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Duration Time
                         Text(
                             text = formatTime(durationMs),
                             fontFamily = MetroFonts.text,
                             fontSize = 12.sp,
                             color = scheme.textDim,
                         )
-                    }
 
-                    Slider(
-                        value = if (durationMs > 0) currentPositionMs.toFloat() / durationMs.toFloat() else 0f,
-                        onValueChange = { fraction ->
-                            val target = (fraction * durationMs).toLong()
-                            exoPlayer.seekTo(target)
-                        },
-                        colors = SliderDefaults.colors(
-                            thumbColor = scheme.accent,
-                            activeTrackColor = scheme.accent,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.20f),
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        // Aspect Ratio Toggle
+                        IconButton(
+                            onClick = {
+                                resizeMode = when (resizeMode) {
+                                    AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                                    else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CropFree,
+                                contentDescription = "Масштаб экрана",
+                                tint = scheme.textDim,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
                 }
             }
         }

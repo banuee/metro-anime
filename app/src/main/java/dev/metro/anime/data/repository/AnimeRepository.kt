@@ -32,29 +32,50 @@ class AnimeRepository(context: Context) {
 
     suspend fun searchAnime(query: String): List<AnimeTitle> {
         if (query.isBlank()) return emptyList()
-        val directResults = ApiClient.searchAniLibria(query, limit = 30)
-        if (directResults.isNotEmpty()) return directResults
-
-        // If direct search gave 0 results, try resolving via Shikimori
+        val directResults = ApiClient.searchAniLibria(query, limit = 25)
         val shikiQuery = ApiClient.resolveShikimoriRussianTitle(query)
-        if (!shikiQuery.isNullOrBlank() && shikiQuery != query) {
-            val shikiResults = ApiClient.searchAniLibria(shikiQuery, limit = 30)
-            if (shikiResults.isNotEmpty()) return shikiResults
+        val shikiAniResults = if (!shikiQuery.isNullOrBlank() && shikiQuery != query) {
+            ApiClient.searchAniLibria(shikiQuery, limit = 25)
+        } else emptyList()
+
+        val kodikQuery = shikiQuery ?: query
+        val kodikResults = ApiClient.searchKodikTitles(kodikQuery, limit = 25)
+
+        val combined = mutableListOf<AnimeTitle>()
+        combined.addAll(directResults)
+        val seenTitles = directResults.map { it.titleRu.lowercase().trim() }.toMutableSet()
+        val seenShiki = directResults.mapNotNull { it.shikimoriId }.toMutableSet()
+
+        for (item in shikiAniResults) {
+            val key = item.titleRu.lowercase().trim()
+            val shiki = item.shikimoriId
+            if (!seenTitles.contains(key) && (shiki == null || !seenShiki.contains(shiki))) {
+                combined.add(item)
+                seenTitles.add(key)
+                if (shiki != null) seenShiki.add(shiki)
+            }
         }
 
-        // Also fallback to searching Kodik catalog
-        val kodikResults = ApiClient.searchKodikTitles(query)
-        if (kodikResults.isNotEmpty()) return kodikResults
-        if (!shikiQuery.isNullOrBlank()) {
-            return ApiClient.searchKodikTitles(shikiQuery)
+        for (item in kodikResults) {
+            val key = item.titleRu.lowercase().trim()
+            val shiki = item.shikimoriId
+            if (!seenTitles.contains(key) && (shiki == null || !seenShiki.contains(shiki))) {
+                combined.add(item)
+                seenTitles.add(key)
+                if (shiki != null) seenShiki.add(shiki)
+            }
         }
-        return emptyList()
+
+        return combined
     }
 
     suspend fun getAnimeDetails(idOrAlias: String, shikimoriId: Long?, titleQuery: String?): AnimeDetails? {
+        val details: AnimeDetails
+        val kodikDubs: List<DubbingGroup>
+
         if (idOrAlias.startsWith("kodik_")) {
-            val dubs = ApiClient.getKodikDubs(shikimoriId, titleQuery)
-            return AnimeDetails(
+            kodikDubs = ApiClient.getKodikDubs(shikimoriId, titleQuery)
+            details = AnimeDetails(
                 title = AnimeTitle(
                     id = idOrAlias,
                     titleRu = titleQuery ?: "Аниме",
@@ -62,25 +83,60 @@ class AnimeRepository(context: Context) {
                     shikimoriId = shikimoriId,
                     source = AnimeSource.KODIK,
                 ),
-                dubbings = dubs,
+                dubbings = emptyList(),
                 rawDescription = "Просмотр через Kodik",
             )
+        } else {
+            val aniDetails = ApiClient.getAniLibriaDetails(idOrAlias) ?: return null
+            kodikDubs = ApiClient.getKodikDubs(shikimoriId ?: aniDetails.title.shikimoriId, titleQuery ?: aniDetails.title.titleRu)
+            details = aniDetails
         }
 
-        val details = ApiClient.getAniLibriaDetails(idOrAlias) ?: return null
-
-        // Also fetch Kodik alternative dubs asynchronously if available
-        val kodikDubs = ApiClient.getKodikDubs(shikimoriId ?: details.title.shikimoriId, titleQuery ?: details.title.titleRu)
-        val combinedDubs = details.dubbings.toMutableList()
-
-        for (kd in kodikDubs) {
-            // Avoid duplicate AniLibria dub if Kodik also has AniLibria
-            if (!kd.title.contains("AniLibria", ignoreCase = true)) {
-                combinedDubs.add(kd)
+        val allDubs = mutableListOf<DubbingGroup>()
+        // Format AniLibria dub
+        for (ad in details.dubbings) {
+            val eps = ad.episodes.sortedBy { it.ordinal }
+            val first = eps.firstOrNull()?.ordinal ?: 1
+            val last = eps.lastOrNull()?.ordinal ?: eps.size
+            val count = eps.size
+            val label = if (first > 1) {
+                "AniLibria (${first}–${last} эп.)"
+            } else {
+                "AniLibria (${count} эп.)"
             }
+            allDubs.add(ad.copy(title = label, episodes = eps))
         }
 
-        return details.copy(dubbings = combinedDubs)
+        // Format Kodik dubs
+        for (kd in kodikDubs) {
+            if (kd.title.contains("AniLibria", ignoreCase = true) && allDubs.isNotEmpty()) {
+                continue
+            }
+            val eps = kd.episodes.sortedBy { it.ordinal }
+            val first = eps.firstOrNull()?.ordinal ?: 1
+            val last = eps.lastOrNull()?.ordinal ?: eps.size
+            val count = eps.size
+            val label = if (first > 1) {
+                "${kd.title} (${first}–${last} эп.)"
+            } else {
+                "${kd.title} (${count} эп.)"
+            }
+            allDubs.add(kd.copy(title = label, episodes = eps))
+        }
+
+        // Smart sort dubs:
+        // Priority 1: Dubs that start at episode 1 with the highest number of episodes!
+        // Priority 2: Other dubs by episode count descending
+        val sortedDubs = allDubs.sortedWith(
+            compareByDescending<DubbingGroup> { dub ->
+                val first = dub.episodes.firstOrNull()?.ordinal ?: 1
+                if (first == 1) 1 else 0
+            }.thenByDescending { dub ->
+                dub.episodes.size
+            }
+        )
+
+        return details.copy(dubbings = sortedDubs)
     }
 
     suspend fun resolveEpisodeStream(episode: AnimeEpisode, source: AnimeSource): Map<String, String> {

@@ -32,37 +32,45 @@ import dev.metro.anime.ui.theme.metroClickable
 fun MetroHeader(
     title: String,
     subtitle: String? = null,
+    trailingAction: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val scheme = LocalMetroScheme.current
-    Column(modifier = modifier.fillMaxWidth()) {
-        // Accent pill indicator
-        Box(
-            modifier = Modifier
-                .width(28.dp)
-                .height(3.dp)
-                .clip(RoundedCornerShape(1.5.dp))
-                .background(scheme.accent)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = title.uppercase(),
-            fontFamily = MetroFonts.headline,
-            fontWeight = FontWeight.Light,
-            fontSize = 26.sp,
-            letterSpacing = 1.8.sp,
-            color = scheme.text,
-        )
-        if (subtitle != null) {
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                fontFamily = MetroFonts.text,
-                fontWeight = FontWeight.Normal,
-                fontSize = 13.sp,
-                color = scheme.textDim,
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            // Accent pill indicator
+            Box(
+                modifier = Modifier
+                    .width(28.dp)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(1.5.dp))
+                    .background(scheme.accent)
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = title.uppercase(),
+                fontFamily = MetroFonts.headline,
+                fontWeight = FontWeight.Light,
+                fontSize = 26.sp,
+                letterSpacing = 1.8.sp,
+                color = scheme.text,
+            )
+            if (subtitle != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    fontFamily = MetroFonts.text,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 13.sp,
+                    color = scheme.textDim,
+                )
+            }
         }
+        trailingAction?.invoke()
     }
 }
 
