@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import dev.metro.anime.ui.components.MetroButton
 import dev.metro.anime.ui.components.MetroIconButton
 import dev.metro.anime.ui.components.MetroTopBar
+import dev.metro.anime.ui.theme.FrostedGlassBox
 import dev.metro.anime.ui.theme.LocalMetroScheme
 import dev.metro.anime.ui.theme.MetroDimens
 import dev.metro.anime.ui.theme.MetroFonts
@@ -102,7 +103,7 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .height(180.dp)
                         .clip(RoundedCornerShape(MetroDimens.radius))
-                        .background(scheme.glassDeep)
+                        .background(scheme.glass)
                         .border(1.dp, scheme.strokeStrong, RoundedCornerShape(MetroDimens.radius)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -468,20 +469,24 @@ fun SettingsScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(MetroDimens.radius))
-                        .background(scheme.glassDeep)
-                        .border(1.dp, scheme.accent.copy(alpha = 0.7f), RoundedCornerShape(MetroDimens.radius))
-                        .padding(14.dp),
+                FrostedGlassBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MetroDimens.radius,
+                    tint = scheme.glassHover,
+                    borderColor = scheme.accent.copy(alpha = 0.50f),
+                    borderWidth = 1.dp,
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                                .background(scheme.accent),
+                                .background(scheme.accent.copy(alpha = 0.85f)),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
@@ -501,7 +506,7 @@ fun SettingsScreen(
                                 color = scheme.text,
                             )
                             Text(
-                                text = "Акцент, акриловое стекло и шрифт Segoe UI",
+                                text = "Акцент, полупрозрачный акрил и шрифт Segoe UI",
                                 fontFamily = MetroFonts.text,
                                 fontSize = 12.sp,
                                 color = scheme.accent,

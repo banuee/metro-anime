@@ -68,7 +68,10 @@ class MainActivity : ComponentActivity() {
             }
 
             MetroTheme(scheme = customScheme) {
-                var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
+                CompositionLocalProvider(
+                    dev.metro.anime.ui.theme.LocalBlurredWallpaper provides (if (settings.blurEnabled) wallpaper?.blurred else null),
+                ) {
+                    var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
 
                 BackHandler(enabled = currentScreen !is Screen.Home) {
                     currentScreen = when (val s = currentScreen) {
@@ -176,4 +179,5 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
 }

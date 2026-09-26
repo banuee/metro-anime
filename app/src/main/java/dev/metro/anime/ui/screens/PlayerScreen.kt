@@ -46,8 +46,13 @@ import dev.metro.anime.data.repository.AnimeRepository
 import dev.metro.anime.ui.components.MetroButton
 import dev.metro.anime.ui.components.MetroChip
 import dev.metro.anime.ui.theme.LocalMetroScheme
+import dev.chrisbanes.haze.HazeDefaults
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import dev.metro.anime.ui.theme.MetroDimens
 import dev.metro.anime.ui.theme.MetroFonts
+import dev.metro.anime.ui.theme.metroBlurEffect
 import dev.metro.anime.ui.theme.metroClickable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -69,6 +74,17 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val scheme = LocalMetroScheme.current
+    val hazeState = remember { HazeState() }
+
+    var playPausePulseVisible by remember { mutableStateOf(false) }
+    var playPausePulseIsPlay by remember { mutableStateOf(false) }
+
+    LaunchedEffect(playPausePulseVisible) {
+        if (playPausePulseVisible) {
+            delay(500)
+            playPausePulseVisible = false
+        }
+    }
 
     var streams by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var selectedQuality by remember { mutableStateOf("720") }
@@ -248,7 +264,8 @@ fun PlayerScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .hazeSource(state = hazeState),
     ) {
         // Video View
         AndroidView(
@@ -272,12 +289,13 @@ fun PlayerScreen(
         )
 
         // =====================================================================
-        // Gesture Layer: Left Half (Rewind 10s & 1.5x speed hold)
+        // Gesture Layer: 3 Zones (Left: -10s/1.5x, Center: Play/Pause, Right: +10s/2.0x)
         // =====================================================================
         Row(modifier = Modifier.fillMaxSize()) {
+            // Left Half (35%)
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(0.35f)
                     .fillMaxHeight()
                     .pointerInput(baseSpeed, isControlsLocked) {
                         detectTapGestures(
@@ -310,10 +328,35 @@ fun PlayerScreen(
                     }
             )
 
-            // Right Half (Forward 10s & 2.0x speed hold)
+            // Center Zone (30%) - Single tap = Play / Pause toggle
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(0.30f)
+                    .fillMaxHeight()
+                    .pointerInput(isControlsLocked) {
+                        detectTapGestures(
+                            onTap = {
+                                if (!isControlsLocked) {
+                                    if (exoPlayer.isPlaying) {
+                                        exoPlayer.pause()
+                                        isPlaying = false
+                                        playPausePulseIsPlay = false
+                                    } else {
+                                        exoPlayer.play()
+                                        isPlaying = true
+                                        playPausePulseIsPlay = true
+                                    }
+                                    playPausePulseVisible = true
+                                }
+                            }
+                        )
+                    }
+            )
+
+            // Right Half (35%)
+            Box(
+                modifier = Modifier
+                    .weight(0.35f)
                     .fillMaxHeight()
                     .pointerInput(baseSpeed, isControlsLocked) {
                         detectTapGestures(
@@ -347,6 +390,38 @@ fun PlayerScreen(
             )
         }
 
+        // Center Play/Pause Pulsating HUD Feedback
+        AnimatedVisibility(
+            visible = playPausePulseVisible,
+            enter = fadeIn() + scaleIn(initialScale = 0.8f),
+            exit = fadeOut() + scaleOut(targetScale = 1.15f),
+            modifier = Modifier.align(Alignment.Center),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(76.dp)
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeDefaults.style(
+                            backgroundColor = Color(0xFF101016).copy(alpha = 0.40f),
+                            blurRadius = 24.dp,
+                        ),
+                    )
+                    .metroBlurEffect(radiusPx = 28f)
+                    .clip(RoundedCornerShape(38.dp))
+                    .background(Color(0xFF101016).copy(alpha = 0.40f))
+                    .border(1.5.dp, scheme.accent.copy(alpha = 0.8f), RoundedCornerShape(38.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (playPausePulseIsPlay) Icons.Default.PlayArrow else Icons.Default.Pause,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(38.dp),
+                )
+            }
+        }
+
         // =====================================================================
         // HUD: Speed Hold Banner (1.5x / 2.0x)
         // =====================================================================
@@ -361,8 +436,16 @@ fun PlayerScreen(
             val boost = if (isHoldingLeft) "1.5x" else "2.0x"
             Box(
                 modifier = Modifier
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeDefaults.style(
+                            backgroundColor = Color(0xFF101016).copy(alpha = 0.45f),
+                            blurRadius = 24.dp,
+                        ),
+                    )
+                    .metroBlurEffect(radiusPx = 28f)
                     .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                    .background(Color(0xFF141418).copy(alpha = 0.85f))
+                    .background(Color(0xFF101016).copy(alpha = 0.45f))
                     .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
@@ -407,8 +490,16 @@ fun PlayerScreen(
         ) {
             Box(
                 modifier = Modifier
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeDefaults.style(
+                            backgroundColor = Color(0xFF101016).copy(alpha = 0.45f),
+                            blurRadius = 24.dp,
+                        ),
+                    )
+                    .metroBlurEffect(radiusPx = 28f)
                     .clip(RoundedCornerShape(MetroDimens.radius))
-                    .background(Color(0xFF141418).copy(alpha = 0.82f))
+                    .background(Color(0xFF101016).copy(alpha = 0.45f))
                     .border(1.dp, scheme.accent.copy(alpha = 0.6f), RoundedCornerShape(MetroDimens.radius))
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center,
@@ -511,8 +602,16 @@ fun PlayerScreen(
             if (skipTargetSec != null) {
                 Box(
                     modifier = Modifier
+                        .hazeEffect(
+                            state = hazeState,
+                            style = HazeDefaults.style(
+                                backgroundColor = Color(0xFF101016).copy(alpha = 0.45f),
+                                blurRadius = 24.dp,
+                            ),
+                        )
+                        .metroBlurEffect(radiusPx = 28f)
                         .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                        .background(Color(0xFF141418).copy(alpha = 0.85f))
+                        .background(Color(0xFF101016).copy(alpha = 0.45f))
                         .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
                         .metroClickable {
                             exoPlayer.seekTo(skipTargetSec * 1000L)
@@ -548,8 +647,16 @@ fun PlayerScreen(
                     .align(Alignment.TopEnd)
                     .padding(top = 18.dp, end = 20.dp)
                     .size(44.dp)
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeDefaults.style(
+                            backgroundColor = Color(0xFF101016).copy(alpha = 0.45f),
+                            blurRadius = 24.dp,
+                        ),
+                    )
+                    .metroBlurEffect(radiusPx = 28f)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF141418).copy(alpha = 0.75f))
+                    .background(Color(0xFF101016).copy(alpha = 0.45f))
                     .border(1.dp, scheme.accent, RoundedCornerShape(10.dp))
                     .metroClickable { isControlsLocked = false },
                 contentAlignment = Alignment.Center,
@@ -578,30 +685,37 @@ fun PlayerScreen(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.65f),
+                                Color.Black.copy(alpha = 0.35f),
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.80f),
+                                Color.Black.copy(alpha = 0.45f),
                             ),
                         )
                     )
             ) {
                 // -------------------------------------------------------------
-                // TOP BAR: 3 Acrylic Pills
+                // TOP BAR: 3 Acrylic Pills (Left, Dead-Center, Right)
                 // -------------------------------------------------------------
-                Row(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)
                         .padding(horizontal = 20.dp, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // LEFT PILL: [Back] [Mute] [Speed] [Aspect]
                     Row(
                         modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .hazeEffect(
+                                state = hazeState,
+                                style = HazeDefaults.style(
+                                    backgroundColor = Color(0xFF101016).copy(alpha = 0.35f),
+                                    blurRadius = 24.dp,
+                                ),
+                            )
+                            .metroBlurEffect(radiusPx = 28f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF141418).copy(alpha = 0.78f))
-                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                            .background(Color(0xFF101016).copy(alpha = 0.35f))
+                            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -654,12 +768,21 @@ fun PlayerScreen(
                         }
                     }
 
-                    // CENTER PILL: [<] [🎬 24 Серия] [>]
+                    // CENTER PILL: [<] [🎬 24 Серия] [>] (Centered exactly)
                     Row(
                         modifier = Modifier
+                            .align(Alignment.Center)
+                            .hazeEffect(
+                                state = hazeState,
+                                style = HazeDefaults.style(
+                                    backgroundColor = Color(0xFF101016).copy(alpha = 0.35f),
+                                    blurRadius = 24.dp,
+                                ),
+                            )
+                            .metroBlurEffect(radiusPx = 28f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF141418).copy(alpha = 0.78f))
-                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                            .background(Color(0xFF101016).copy(alpha = 0.35f))
+                            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -721,9 +844,18 @@ fun PlayerScreen(
                     // RIGHT PILL: [Settings] [Lock]
                     Row(
                         modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .hazeEffect(
+                                state = hazeState,
+                                style = HazeDefaults.style(
+                                    backgroundColor = Color(0xFF101016).copy(alpha = 0.35f),
+                                    blurRadius = 24.dp,
+                                ),
+                            )
+                            .metroBlurEffect(radiusPx = 28f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF141418).copy(alpha = 0.78f))
-                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+                            .background(Color(0xFF101016).copy(alpha = 0.35f))
+                            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -767,9 +899,17 @@ fun PlayerScreen(
                     Column(
                         modifier = Modifier
                             .width(260.dp)
+                            .hazeEffect(
+                                state = hazeState,
+                                style = HazeDefaults.style(
+                                    backgroundColor = Color(0xFF101016).copy(alpha = 0.45f),
+                                    blurRadius = 24.dp,
+                                ),
+                            )
+                            .metroBlurEffect(radiusPx = 28f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF141418).copy(alpha = 0.90f))
-                            .border(1.dp, scheme.strokeStrong, RoundedCornerShape(12.dp))
+                            .background(Color(0xFF101016).copy(alpha = 0.45f))
+                            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(14.dp),
                     ) {
                         Row(
@@ -831,8 +971,8 @@ fun PlayerScreen(
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(if (baseSpeed == spd) scheme.accent else scheme.glass)
                                         .metroClickable {
-                                            baseSpeed = spd
-                                            exoPlayer.setPlaybackSpeed(spd)
+                                             baseSpeed = spd
+                                             exoPlayer.setPlaybackSpeed(spd)
                                         }
                                         .padding(horizontal = 6.dp, vertical = 3.dp),
                                 ) {
@@ -862,9 +1002,17 @@ fun PlayerScreen(
                     Column(
                         modifier = Modifier
                             .width(260.dp)
+                            .hazeEffect(
+                                state = hazeState,
+                                style = HazeDefaults.style(
+                                    backgroundColor = Color(0xFF101016).copy(alpha = 0.45f),
+                                    blurRadius = 24.dp,
+                                ),
+                            )
+                            .metroBlurEffect(radiusPx = 28f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF141418).copy(alpha = 0.92f))
-                            .border(1.dp, scheme.strokeStrong, RoundedCornerShape(12.dp))
+                            .background(Color(0xFF101016).copy(alpha = 0.45f))
+                            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(14.dp),
                     ) {
                         Row(
@@ -944,16 +1092,24 @@ fun PlayerScreen(
                 }
 
                 // -------------------------------------------------------------
-                // BOTTOM DOCK: [Play/Pause] [00:00] [====Slider====] [23:51] [Aspect]
+                // BOTTOM DOCK: [Play/Pause] [00:00] [====Slider====] [23:51] [FullscreenExit]
                 // -------------------------------------------------------------
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 20.dp, vertical = 14.dp)
+                        .hazeEffect(
+                            state = hazeState,
+                            style = HazeDefaults.style(
+                                backgroundColor = Color(0xFF101016).copy(alpha = 0.38f),
+                                blurRadius = 24.dp,
+                            ),
+                        )
+                        .metroBlurEffect(radiusPx = 28f)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0xFF141418).copy(alpha = 0.82f))
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                        .background(Color(0xFF101016).copy(alpha = 0.38f))
+                        .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(14.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
                     Row(
@@ -1013,21 +1169,18 @@ fun PlayerScreen(
 
                         Spacer(modifier = Modifier.width(4.dp))
 
-                        // Aspect Ratio Toggle
+                        // Exit fullscreen / exit player
                         IconButton(
                             onClick = {
-                                resizeMode = when (resizeMode) {
-                                    AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                                    else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                }
+                                saveCurrentProgress()
+                                onBackClick()
                             }
                         ) {
                             Icon(
-                                imageVector = Icons.Default.CropFree,
-                                contentDescription = "Масштаб экрана",
-                                tint = scheme.textDim,
-                                modifier = Modifier.size(20.dp),
+                                imageVector = Icons.Default.FullscreenExit,
+                                contentDescription = "Выйти из плеера",
+                                tint = scheme.text,
+                                modifier = Modifier.size(22.dp),
                             )
                         }
                     }

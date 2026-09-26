@@ -31,6 +31,7 @@ import dev.metro.anime.data.repository.AnimeRepository
 import dev.metro.anime.ui.components.MetroChip
 import dev.metro.anime.ui.components.MetroIconButton
 import dev.metro.anime.ui.components.MetroTopBar
+import dev.metro.anime.ui.theme.FrostedGlassBox
 import dev.metro.anime.ui.theme.LocalMetroScheme
 import dev.metro.anime.ui.theme.MetroDimens
 import dev.metro.anime.ui.theme.MetroFonts
@@ -210,13 +211,10 @@ fun DetailsScreen(
                 // Continue Watching Hero Button (if previously watched)
                 if (watchProgress != null) {
                     item {
-                        Box(
+                        FrostedGlassBox(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
-                                .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                                .background(scheme.glassDeep)
-                                .border(1.dp, scheme.accent.copy(alpha = 0.6f), RoundedCornerShape(MetroDimens.radiusSmall))
                                 .metroClickable {
                                     val targetEp = episodes.find { it.ordinal == watchProgress.episodeOrdinal }
                                         ?: episodes.firstOrNull()
@@ -230,11 +228,16 @@ fun DetailsScreen(
                                             episodes,
                                         )
                                     }
-                                }
-                                .padding(14.dp),
+                                },
+                            shape = MetroDimens.radiusSmall,
+                            tint = scheme.glassHover,
+                            borderColor = scheme.accent.copy(alpha = 0.50f),
+                            borderWidth = 1.dp,
                         ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Box(
@@ -486,18 +489,15 @@ fun EpisodeItemRow(
         (watchProgress.positionMs.toFloat() / watchProgress.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
 
-    Box(
+    FrostedGlassBox(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-            .background(if (isCurrentWatched) scheme.glassHover else scheme.glass)
-            .border(
-                MetroDimens.strokeWidth,
-                if (isCurrentWatched) scheme.accent.copy(alpha = 0.6f) else scheme.stroke,
-                RoundedCornerShape(MetroDimens.radiusSmall)
-            )
             .metroClickable(onClick = onClick),
+        shape = MetroDimens.radiusSmall,
+        tint = if (isCurrentWatched) scheme.glassHover else scheme.glass,
+        borderColor = if (isCurrentWatched) scheme.accent.copy(alpha = 0.6f) else scheme.stroke,
+        borderWidth = MetroDimens.strokeWidth,
     ) {
         Column {
             Row(

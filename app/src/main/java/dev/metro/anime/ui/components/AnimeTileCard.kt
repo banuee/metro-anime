@@ -36,7 +36,7 @@ fun AnimeTileCard(
             .fillMaxWidth()
             .aspectRatio(0.68f)
             .clip(RoundedCornerShape(MetroDimens.radius))
-            .background(scheme.glassDeep)
+            .background(scheme.glass)
             .border(MetroDimens.strokeWidth, scheme.stroke, RoundedCornerShape(MetroDimens.radius))
             .metroClickable(onClick = onClick),
     ) {

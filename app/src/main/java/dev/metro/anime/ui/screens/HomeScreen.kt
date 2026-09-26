@@ -36,6 +36,7 @@ import dev.metro.anime.data.model.AnimeTitle
 import dev.metro.anime.data.model.WatchProgress
 import dev.metro.anime.data.repository.AnimeRepository
 import dev.metro.anime.ui.components.*
+import dev.metro.anime.ui.theme.FrostedGlassBox
 import dev.metro.anime.ui.theme.LocalMetroScheme
 import dev.metro.anime.ui.theme.MetroDimens
 import dev.metro.anime.ui.theme.MetroFonts
@@ -122,7 +123,7 @@ fun HomeScreen(
         // Metro Header
         MetroHeader(
             title = "Metro Anime",
-            subtitle = "Чистый просмотр без рекламы",
+            subtitle = null,
             trailingAction = {
                 MetroIconButton(
                     icon = Icons.Default.Settings,
@@ -241,22 +242,25 @@ fun HomeScreen(
                             // Resume watching banner if there is history
                             if (history.isNotEmpty()) {
                                 val last = history.first()
-                                Box(
+                                FrostedGlassBox(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(bottom = 12.dp)
-                                        .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                                        .background(scheme.glassDeep)
-                                        .border(1.dp, scheme.accent.copy(alpha = 0.5f), RoundedCornerShape(MetroDimens.radiusSmall))
-                                        .metroClickable { onAnimeClick(last.anime) }
-                                        .padding(10.dp)
+                                        .metroClickable { onAnimeClick(last.anime) },
+                                    shape = MetroDimens.radiusSmall,
+                                    tint = scheme.glassHover,
+                                    borderColor = scheme.accent.copy(alpha = 0.45f),
+                                    borderWidth = 1.dp,
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(10.dp),
+                                    ) {
                                         Box(
                                             modifier = Modifier
                                                 .size(36.dp)
                                                 .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                                                .background(scheme.accent),
+                                                .background(scheme.accent.copy(alpha = 0.85f)),
                                             contentAlignment = Alignment.Center,
                                         ) {
                                             Icon(
@@ -392,13 +396,14 @@ fun HistoryItemCard(
         (item.positionMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
 
-    Box(
+    FrostedGlassBox(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-            .background(scheme.glass)
-            .border(MetroDimens.strokeWidth, scheme.stroke, RoundedCornerShape(MetroDimens.radiusSmall))
             .metroClickable(onClick = onClick),
+        shape = MetroDimens.radiusSmall,
+        tint = scheme.glass,
+        borderColor = scheme.stroke,
+        borderWidth = MetroDimens.strokeWidth,
     ) {
         Column {
             Row(
