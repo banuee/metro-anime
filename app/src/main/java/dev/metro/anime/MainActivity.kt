@@ -1,5 +1,6 @@
 package dev.metro.anime
 
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -79,6 +80,12 @@ class MainActivity : ComponentActivity() {
                         is Screen.Details -> Screen.Home
                         is Screen.Settings -> Screen.Home
                         is Screen.Home -> Screen.Home
+                    }
+                }
+
+                LaunchedEffect(currentScreen) {
+                    if (currentScreen !is Screen.Player) {
+                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                     }
                 }
 

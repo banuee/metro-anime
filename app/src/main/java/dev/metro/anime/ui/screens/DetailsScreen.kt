@@ -54,8 +54,9 @@ fun DetailsScreen(
     var selectedDubIndex by remember { mutableIntStateOf(0) }
     var isAscending by remember { mutableStateOf(true) }
     var selectedRangeIndex by remember { mutableIntStateOf(0) }
-    val isBookmarked by remember {
-        derivedStateOf { repository.isBookmarked(anime.id) }
+    val bookmarks by repository.bookmarks.collectAsState()
+    val isBookmarked = remember(bookmarks, anime.id) {
+        bookmarks.any { it.id == anime.id }
     }
     val watchProgress = remember(anime.id) {
         repository.getProgress(anime.id)
@@ -90,8 +91,8 @@ fun DetailsScreen(
             trailingAction = {
                 MetroIconButton(
                     icon = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                    contentDescription = "В закладки",
-                    tint = if (isBookmarked) scheme.red else scheme.text,
+                    contentDescription = if (isBookmarked) "Удалить из избранного" else "В избранное",
+                    tint = if (isBookmarked) scheme.accent else scheme.text,
                     onClick = { repository.toggleBookmark(anime) },
                 )
             },

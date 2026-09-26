@@ -134,7 +134,6 @@ fun PlayerScreen(
     // Fullscreen Immersive Mode & Landscape Orientation
     DisposableEffect(Unit) {
         val activity = context as? Activity
-        val origOrientation = activity?.requestedOrientation
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
@@ -147,7 +146,7 @@ fun PlayerScreen(
 
         onDispose {
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity?.requestedOrientation = origOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             insetsController?.show(WindowInsetsCompat.Type.systemBars())
         }
     }
