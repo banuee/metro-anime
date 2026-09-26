@@ -1,0 +1,457 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:2:1-26:12
+INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:2:1-26:12
+INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:2:1-26:12
+INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:2:1-26:12
+MERGED from [io.coil-kt:coil-compose:2.7.0] /home/banue/.gradle/caches/9.6.1/transforms/4f87b45f72086b290d8d2005f5a00316/transformed/coil-compose-2.7.0/AndroidManifest.xml:2:1-7:12
+MERGED from [io.coil-kt:coil-compose-base:2.7.0] /home/banue/.gradle/caches/9.6.1/transforms/9dc6747df8496eed04de6609204bb03e/transformed/coil-compose-base-2.7.0/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.animation:animation-core-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/a66a741787425083f0c2f45caa3648c5/transformed/animation-core/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.material:material-ripple-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/ac4a89b2f53fdac3267bfa40b785d217/transformed/material-ripple/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.animation:animation-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/ddbdab4511b09c827b9add011f1a1d51/transformed/animation/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.foundation:foundation-layout-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/3b554c895df70fbfb7abe359221370a4/transformed/foundation-layout/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.foundation:foundation-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/dbead8a75ae25b4c75f16871ac3cdc51/transformed/foundation/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-tooling-data-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/4fc6aeaf0426326cb4c3124b02cf5c26/transformed/ui-tooling-data/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-unit-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/42606cd8a6a7cc8be93bf3b39371644e/transformed/ui-unit/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-graphics-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/5fc646ea6c82f4e67bccbeda188b428c/transformed/ui-graphics/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-geometry-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/c75aa2a3e1c5a900c007276088a6aa47/transformed/ui-geometry/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-util-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/c344e9a6bb79d4016dda7131cfe16aa2/transformed/ui-util/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-text-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/e1c3436a6999bb3490fcb427b101e93d/transformed/ui-text/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-tooling-preview-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/46df29ef47817a7a548063e45747c779/transformed/ui-tooling-preview/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.compose.ui:ui-tooling-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/368f87c21e76c58faa284fc99cbc93af/transformed/ui-tooling/AndroidManifest.xml:17:1-28:12
+MERGED from [androidx.compose.material3:material3-android:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/623b5c4e639d3793c1be0248f633586e/transformed/material3/AndroidManifest.xml:17:1-22:12
+MERGED from [com.google.accompanist:accompanist-drawablepainter:0.32.0] /home/banue/.gradle/caches/9.6.1/transforms/dda721ea55239578f1555426aa2a723e/transformed/accompanist-drawablepainter-0.32.0/AndroidManifest.xml:17:1-23:12
+MERGED from [androidx.compose.material:material-icons-extended-android:1.7.8] /home/banue/.gradle/caches/9.6.1/transforms/25f2d52357dc00f9670d94ecdaf6083b/transformed/material-icons-extended-release/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.material:material-icons-core-android:1.7.8] /home/banue/.gradle/caches/9.6.1/transforms/2078433ddaf6b26c5d0dd15392981d76/transformed/material-icons-core-release/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.runtime:runtime-annotation-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/fe99fec0919514f9dd930c4ce172ff24/transformed/runtime-annotation/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.runtime:runtime-retain-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/44aa80335735ca39faf1d02ac0033aab/transformed/runtime-retain/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.activity:activity:1.10.1] /home/banue/.gradle/caches/9.6.1/transforms/35b53a9f0e63d82a6a3cf9262616b6a3/transformed/activity-1.10.1/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:17:1-35:12
+MERGED from [androidx.media3:media3-ui:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/8beab90ce7c41bd62ac4d92f748ec597/transformed/media3-ui-1.5.1/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-extractor:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/721e006a6d78dfff55c9d1eaa1731c8e/transformed/media3-extractor-1.5.1/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-container:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/4dacf624c60ef1b19d242da1685e0cb6/transformed/media3-container-1.5.1/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-datasource:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/556ea339c5b90228c0c1465f5c39ad35/transformed/media3-datasource-1.5.1/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-decoder:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/4188543fe067106ac59cd843b332535a/transformed/media3-decoder-1.5.1/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-database:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/c37082b5fae45c89311becc00ca847e4/transformed/media3-database-1.5.1/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-common:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/5501e8eed305c48a5d5eb502e05f3d43/transformed/media3-common-1.5.1/AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.media3:media3-exoplayer-hls:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/b0e93c12d4a25a12398169ed26a51730/transformed/media3-exoplayer-hls-1.5.1/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-exoplayer:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/0514d36d2ed6ebe0d5b106094d4080b3/transformed/media3-exoplayer-1.5.1/AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.media:media:1.7.0] /home/banue/.gradle/caches/9.6.1/transforms/b42d662c559a99c93d1397d9908fa95f/transformed/media-1.7.0/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.recyclerview:recyclerview:1.3.0] /home/banue/.gradle/caches/9.6.1/transforms/4abe86e84c8814955a5159096b6611f0/transformed/recyclerview-1.3.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.customview:customview:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/d979f89c62fcf6986544e74dad78d47c/transformed/customview-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.autofill:autofill:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/2211086469244fe0aa5fa9db982e4a9c/transformed/autofill-1.0.0/AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.transition:transition:1.6.0] /home/banue/.gradle/caches/9.6.1/transforms/a67b78016d528c0260dfda8fd8886915/transformed/transition-1.6.0/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.window:window-core-android:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/cf910bbdb5778d6a8b50f345047fd14d/transformed/window-core/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.window:window:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/84b14756d2e0c08862d5cdea9df25ddf/transformed/window-1.5.0/AndroidManifest.xml:17:1-31:12
+MERGED from [io.coil-kt:coil:2.7.0] /home/banue/.gradle/caches/9.6.1/transforms/eb6709f3c94473f4bdabbdb0a4e6b08b/transformed/coil-2.7.0/AndroidManifest.xml:2:1-7:12
+MERGED from [io.coil-kt:coil-base:2.7.0] /home/banue/.gradle/caches/9.6.1/transforms/fc5dd47b5c8dd68a00fb8d431779c9c9/transformed/coil-base-2.7.0/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.appcompat:appcompat-resources:1.6.1] /home/banue/.gradle/caches/9.6.1/transforms/38c70fe622f64ee5ee879f2a195b7f95/transformed/appcompat-resources-1.6.1/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.dynamicanimation:dynamicanimation:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/da5e237a963acf44366530653e3f3f7b/transformed/dynamicanimation-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] /home/banue/.gradle/caches/9.6.1/transforms/09668b0724b38985b3d117369a6010e8/transformed/vectordrawable-animated-1.1.0/AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] /home/banue/.gradle/caches/9.6.1/transforms/084cc12931812cb36c2c3a4d5557f6a4/transformed/vectordrawable-1.1.0/AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.graphics:graphics-path:1.0.1] /home/banue/.gradle/caches/9.6.1/transforms/55d0e4cf308e25de4136f261c6b6b5c7/transformed/graphics-path-1.0.1/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/6a58b86454c1d4945b3233fb0f48f8b7/transformed/legacy-support-core-utils-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.loader:loader:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/a1aacc33b856317c997438d904813c3a/transformed/loader-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:17:1-30:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/b6178b8cd30bfbcaeaab25020ed7c7b4/transformed/lifecycle-livedata-core-ktx-2.9.4/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/08e38cfad4062168e34825461061ddab/transformed/lifecycle-livedata-core-2.9.4/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/9b136f8113309e218420e4b533b08267/transformed/lifecycle-livedata-2.9.4/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/84d07400b0ea8fec0675874a19d9425a/transformed/lifecycle-viewmodel-2.9.4/AndroidManifest.xml:2:1-5:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c88af4a695f60bb39b0020bb85fe3e3b/transformed/lifecycle-viewmodel-release/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/9db7dac353dbb18a5fbef20cdf4a2d6c/transformed/lifecycle-runtime-ktx/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-runtime-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/346f71ca574a230298d7b17dd650495f/transformed/lifecycle-runtime-release/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-process:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c00e447a7eeee1699de25d6e838e2434/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:17:1-35:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/11c5d43231617f7c80a29c79fb47d196/transformed/lifecycle-viewmodel-ktx-2.9.4/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/7b1b2b1352f833fd1724c3969a786eed/transformed/lifecycle-viewmodel-savedstate-release/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.savedstate:savedstate-android:1.3.2] /home/banue/.gradle/caches/9.6.1/transforms/dea845823804b7a66a17cdf475141b0f/transformed/savedstate-release/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.savedstate:savedstate-ktx:1.3.2] /home/banue/.gradle/caches/9.6.1/transforms/0f7d076af29df0fe4ce33c7c97047eed/transformed/savedstate-ktx-1.3.2/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.savedstate:savedstate-compose-android:1.3.2] /home/banue/.gradle/caches/9.6.1/transforms/9d41b57f455dd3b14ec3994ae921eeb1/transformed/savedstate-compose/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.runtime:runtime-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/ce0049cb8190797c42647d2c8e6c08a1/transformed/runtime/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.runtime:runtime-saveable-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/8bd5492d39038a7ce80b229a49712cb0/transformed/runtime-saveable/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-runtime-compose-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/336f42f048f80718f4a8fb05d1b70e92/transformed/lifecycle-runtime-compose-release/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-compose-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/13e7b5fd9cfbff919158547e31268327/transformed/lifecycle-viewmodel-compose-release/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/fb45c4b59304dac966e0fb4995f4454b/transformed/ui/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.activity:activity-ktx:1.10.1] /home/banue/.gradle/caches/9.6.1/transforms/df3331ad69ec2f7183ec39406c861312/transformed/activity-ktx-1.10.1/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.activity:activity-compose:1.10.1] /home/banue/.gradle/caches/9.6.1/transforms/aa9da6ea12bd7d09397d4ed11c893a0d/transformed/activity-compose-1.10.1/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/fe5eb0b32b59385ee5915e5335a7e022/transformed/customview-poolingcontainer-1.0.0/AndroidManifest.xml:17:1-23:12
+MERGED from [androidx.core:core-ktx:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/edf7d5cd36de7346da15d989498c7933/transformed/core-ktx-1.16.0/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.datastore:datastore-core-android:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/be07b5f03efa4287a7c9d98509d0f9ce/transformed/datastore-core-release/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.datastore:datastore-android:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/8456d590798a6a569204709a0f6107dc/transformed/datastore-release/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/067319044d1d1851f661f9b2e11333c4/transformed/datastore-preferences-release/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] /home/banue/.gradle/caches/9.6.1/transforms/26d997ff68780d2441f132e18c6463c6/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.core:core-viewtree:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/14fc991bdfa2b2700f40eb0d4857bd97/transformed/core-viewtree-1.0.0/AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/3dcec5459fb7df8657e8fd83ae823306/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:17:1-27:12
+MERGED from [androidx.interpolator:interpolator:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/f15ded658e59fb1e41a732f0fbc71909/transformed/interpolator-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:17:1-55:12
+MERGED from [androidx.startup:startup-runtime:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/2eb25e5d93ef4e0ab9bfb2b73b314413/transformed/startup-runtime-1.1.1/AndroidManifest.xml:17:1-33:12
+MERGED from [androidx.tracing:tracing:1.2.0] /home/banue/.gradle/caches/9.6.1/transforms/eee3964196835eb8ee8972685c6e1798/transformed/tracing-1.2.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.exifinterface:exifinterface:1.3.7] /home/banue/.gradle/caches/9.6.1/transforms/2dc0f053a84a26a0e19a059bee0b9961/transformed/exifinterface-1.3.7/AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.documentfile:documentfile:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/3100b2fdc197adac925db2371303ee59/transformed/documentfile-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/4704ff983b48ebc5cbdec7e1acf48bcb/transformed/localbroadcastmanager-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.print:print:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/35a1bd20386a57fc9ae456463c27a59a/transformed/print-1.0.0/AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.arch.core:core-runtime:2.2.0] /home/banue/.gradle/caches/9.6.1/transforms/4fab353d7a65b6623f4e8dbf7078a64b/transformed/core-runtime-2.2.0/AndroidManifest.xml:17:1-22:12
+	package
+		INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml
+	android:versionName
+		INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml
+	android:versionCode
+		INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:2:11-69
+uses-permission#android.permission.INTERNET
+ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:4:5-67
+	android:name
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:4:22-64
+uses-permission#android.permission.ACCESS_NETWORK_STATE
+ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:5:5-79
+MERGED from [androidx.media3:media3-common:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/5501e8eed305c48a5d5eb502e05f3d43/transformed/media3-common-1.5.1/AndroidManifest.xml:22:5-79
+MERGED from [androidx.media3:media3-common:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/5501e8eed305c48a5d5eb502e05f3d43/transformed/media3-common-1.5.1/AndroidManifest.xml:22:5-79
+MERGED from [androidx.media3:media3-exoplayer:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/0514d36d2ed6ebe0d5b106094d4080b3/transformed/media3-exoplayer-1.5.1/AndroidManifest.xml:22:5-79
+MERGED from [androidx.media3:media3-exoplayer:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/0514d36d2ed6ebe0d5b106094d4080b3/transformed/media3-exoplayer-1.5.1/AndroidManifest.xml:22:5-79
+	android:name
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:5:22-76
+application
+ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:7:5-25:19
+INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:7:5-25:19
+MERGED from [androidx.compose.ui:ui-tooling-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/368f87c21e76c58faa284fc99cbc93af/transformed/ui-tooling/AndroidManifest.xml:22:5-26:19
+MERGED from [androidx.compose.ui:ui-tooling-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/368f87c21e76c58faa284fc99cbc93af/transformed/ui-tooling/AndroidManifest.xml:22:5-26:19
+MERGED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.window:window:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/84b14756d2e0c08862d5cdea9df25ddf/transformed/window-1.5.0/AndroidManifest.xml:22:5-29:19
+MERGED from [androidx.window:window:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/84b14756d2e0c08862d5cdea9df25ddf/transformed/window-1.5.0/AndroidManifest.xml:22:5-29:19
+MERGED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:28:5-89
+MERGED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:28:5-89
+MERGED from [androidx.lifecycle:lifecycle-process:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c00e447a7eeee1699de25d6e838e2434/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.lifecycle:lifecycle-process:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c00e447a7eeee1699de25d6e838e2434/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/3dcec5459fb7df8657e8fd83ae823306/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:24:5-25:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/3dcec5459fb7df8657e8fd83ae823306/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:24:5-25:19
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/2eb25e5d93ef4e0ab9bfb2b73b314413/transformed/startup-runtime-1.1.1/AndroidManifest.xml:25:5-31:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/2eb25e5d93ef4e0ab9bfb2b73b314413/transformed/startup-runtime-1.1.1/AndroidManifest.xml:25:5-31:19
+	android:extractNativeLibs
+		INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml
+	android:appComponentFactory
+		ADDED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:28:18-86
+	android:supportsRtl
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:14:9-35
+	android:label
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:9:9-41
+	android:roundIcon
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:11:9-54
+	android:icon
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:10:9-43
+	android:allowBackup
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:8:9-35
+	android:theme
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:12:9-48
+	android:usesCleartextTraffic
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:13:9-44
+activity#dev.metro.anime.MainActivity
+ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:15:9-24:20
+	android:exported
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:17:13-36
+	android:configChanges
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:18:13-106
+	android:theme
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:19:13-52
+	android:name
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:16:13-41
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
+ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:20:13-23:29
+action#android.intent.action.MAIN
+ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:21:17-69
+	android:name
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:21:25-66
+category#android.intent.category.LAUNCHER
+ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:22:17-77
+	android:name
+		ADDED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml:22:27-74
+uses-sdk
+INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml
+INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml
+MERGED from [io.coil-kt:coil-compose:2.7.0] /home/banue/.gradle/caches/9.6.1/transforms/4f87b45f72086b290d8d2005f5a00316/transformed/coil-compose-2.7.0/AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil-compose:2.7.0] /home/banue/.gradle/caches/9.6.1/transforms/4f87b45f72086b290d8d2005f5a00316/transformed/coil-compose-2.7.0/AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil-compose-base:2.7.0] /home/banue/.gradle/caches/9.6.1/transforms/9dc6747df8496eed04de6609204bb03e/transformed/coil-compose-base-2.7.0/AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil-compose-base:2.7.0] /home/banue/.gradle/caches/9.6.1/transforms/9dc6747df8496eed04de6609204bb03e/transformed/coil-compose-base-2.7.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.animation:animation-core-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/a66a741787425083f0c2f45caa3648c5/transformed/animation-core/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.animation:animation-core-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/a66a741787425083f0c2f45caa3648c5/transformed/animation-core/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-ripple-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/ac4a89b2f53fdac3267bfa40b785d217/transformed/material-ripple/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-ripple-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/ac4a89b2f53fdac3267bfa40b785d217/transformed/material-ripple/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.animation:animation-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/ddbdab4511b09c827b9add011f1a1d51/transformed/animation/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.animation:animation-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/ddbdab4511b09c827b9add011f1a1d51/transformed/animation/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.foundation:foundation-layout-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/3b554c895df70fbfb7abe359221370a4/transformed/foundation-layout/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.foundation:foundation-layout-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/3b554c895df70fbfb7abe359221370a4/transformed/foundation-layout/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.foundation:foundation-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/dbead8a75ae25b4c75f16871ac3cdc51/transformed/foundation/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.foundation:foundation-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/dbead8a75ae25b4c75f16871ac3cdc51/transformed/foundation/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-tooling-data-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/4fc6aeaf0426326cb4c3124b02cf5c26/transformed/ui-tooling-data/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-tooling-data-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/4fc6aeaf0426326cb4c3124b02cf5c26/transformed/ui-tooling-data/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-unit-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/42606cd8a6a7cc8be93bf3b39371644e/transformed/ui-unit/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-unit-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/42606cd8a6a7cc8be93bf3b39371644e/transformed/ui-unit/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-graphics-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/5fc646ea6c82f4e67bccbeda188b428c/transformed/ui-graphics/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-graphics-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/5fc646ea6c82f4e67bccbeda188b428c/transformed/ui-graphics/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-geometry-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/c75aa2a3e1c5a900c007276088a6aa47/transformed/ui-geometry/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-geometry-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/c75aa2a3e1c5a900c007276088a6aa47/transformed/ui-geometry/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-util-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/c344e9a6bb79d4016dda7131cfe16aa2/transformed/ui-util/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-util-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/c344e9a6bb79d4016dda7131cfe16aa2/transformed/ui-util/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-text-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/e1c3436a6999bb3490fcb427b101e93d/transformed/ui-text/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-text-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/e1c3436a6999bb3490fcb427b101e93d/transformed/ui-text/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-tooling-preview-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/46df29ef47817a7a548063e45747c779/transformed/ui-tooling-preview/AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.ui:ui-tooling-preview-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/46df29ef47817a7a548063e45747c779/transformed/ui-tooling-preview/AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.ui:ui-tooling-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/368f87c21e76c58faa284fc99cbc93af/transformed/ui-tooling/AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.ui:ui-tooling-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/368f87c21e76c58faa284fc99cbc93af/transformed/ui-tooling/AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.material3:material3-android:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/623b5c4e639d3793c1be0248f633586e/transformed/material3/AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.material3:material3-android:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/623b5c4e639d3793c1be0248f633586e/transformed/material3/AndroidManifest.xml:20:5-44
+MERGED from [com.google.accompanist:accompanist-drawablepainter:0.32.0] /home/banue/.gradle/caches/9.6.1/transforms/dda721ea55239578f1555426aa2a723e/transformed/accompanist-drawablepainter-0.32.0/AndroidManifest.xml:21:5-44
+MERGED from [com.google.accompanist:accompanist-drawablepainter:0.32.0] /home/banue/.gradle/caches/9.6.1/transforms/dda721ea55239578f1555426aa2a723e/transformed/accompanist-drawablepainter-0.32.0/AndroidManifest.xml:21:5-44
+MERGED from [androidx.compose.material:material-icons-extended-android:1.7.8] /home/banue/.gradle/caches/9.6.1/transforms/25f2d52357dc00f9670d94ecdaf6083b/transformed/material-icons-extended-release/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-icons-extended-android:1.7.8] /home/banue/.gradle/caches/9.6.1/transforms/25f2d52357dc00f9670d94ecdaf6083b/transformed/material-icons-extended-release/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-icons-core-android:1.7.8] /home/banue/.gradle/caches/9.6.1/transforms/2078433ddaf6b26c5d0dd15392981d76/transformed/material-icons-core-release/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-icons-core-android:1.7.8] /home/banue/.gradle/caches/9.6.1/transforms/2078433ddaf6b26c5d0dd15392981d76/transformed/material-icons-core-release/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-annotation-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/fe99fec0919514f9dd930c4ce172ff24/transformed/runtime-annotation/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-annotation-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/fe99fec0919514f9dd930c4ce172ff24/transformed/runtime-annotation/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-retain-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/44aa80335735ca39faf1d02ac0033aab/transformed/runtime-retain/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-retain-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/44aa80335735ca39faf1d02ac0033aab/transformed/runtime-retain/AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity:1.10.1] /home/banue/.gradle/caches/9.6.1/transforms/35b53a9f0e63d82a6a3cf9262616b6a3/transformed/activity-1.10.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.activity:activity:1.10.1] /home/banue/.gradle/caches/9.6.1/transforms/35b53a9f0e63d82a6a3cf9262616b6a3/transformed/activity-1.10.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:21:5-44
+MERGED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:21:5-44
+MERGED from [androidx.media3:media3-ui:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/8beab90ce7c41bd62ac4d92f748ec597/transformed/media3-ui-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-ui:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/8beab90ce7c41bd62ac4d92f748ec597/transformed/media3-ui-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-extractor:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/721e006a6d78dfff55c9d1eaa1731c8e/transformed/media3-extractor-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-extractor:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/721e006a6d78dfff55c9d1eaa1731c8e/transformed/media3-extractor-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-container:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/4dacf624c60ef1b19d242da1685e0cb6/transformed/media3-container-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-container:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/4dacf624c60ef1b19d242da1685e0cb6/transformed/media3-container-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-datasource:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/556ea339c5b90228c0c1465f5c39ad35/transformed/media3-datasource-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-datasource:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/556ea339c5b90228c0c1465f5c39ad35/transformed/media3-datasource-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-decoder:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/4188543fe067106ac59cd843b332535a/transformed/media3-decoder-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-decoder:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/4188543fe067106ac59cd843b332535a/transformed/media3-decoder-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-database:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/c37082b5fae45c89311becc00ca847e4/transformed/media3-database-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-database:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/c37082b5fae45c89311becc00ca847e4/transformed/media3-database-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-common:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/5501e8eed305c48a5d5eb502e05f3d43/transformed/media3-common-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-common:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/5501e8eed305c48a5d5eb502e05f3d43/transformed/media3-common-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-exoplayer-hls:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/b0e93c12d4a25a12398169ed26a51730/transformed/media3-exoplayer-hls-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-exoplayer-hls:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/b0e93c12d4a25a12398169ed26a51730/transformed/media3-exoplayer-hls-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-exoplayer:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/0514d36d2ed6ebe0d5b106094d4080b3/transformed/media3-exoplayer-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-exoplayer:1.5.1] /home/banue/.gradle/caches/9.6.1/transforms/0514d36d2ed6ebe0d5b106094d4080b3/transformed/media3-exoplayer-1.5.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.media:media:1.7.0] /home/banue/.gradle/caches/9.6.1/transforms/b42d662c559a99c93d1397d9908fa95f/transformed/media-1.7.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.media:media:1.7.0] /home/banue/.gradle/caches/9.6.1/transforms/b42d662c559a99c93d1397d9908fa95f/transformed/media-1.7.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.recyclerview:recyclerview:1.3.0] /home/banue/.gradle/caches/9.6.1/transforms/4abe86e84c8814955a5159096b6611f0/transformed/recyclerview-1.3.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.recyclerview:recyclerview:1.3.0] /home/banue/.gradle/caches/9.6.1/transforms/4abe86e84c8814955a5159096b6611f0/transformed/recyclerview-1.3.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.customview:customview:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/d979f89c62fcf6986544e74dad78d47c/transformed/customview-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.customview:customview:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/d979f89c62fcf6986544e74dad78d47c/transformed/customview-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.autofill:autofill:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/2211086469244fe0aa5fa9db982e4a9c/transformed/autofill-1.0.0/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.autofill:autofill:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/2211086469244fe0aa5fa9db982e4a9c/transformed/autofill-1.0.0/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.transition:transition:1.6.0] /home/banue/.gradle/caches/9.6.1/transforms/a67b78016d528c0260dfda8fd8886915/transformed/transition-1.6.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.transition:transition:1.6.0] /home/banue/.gradle/caches/9.6.1/transforms/a67b78016d528c0260dfda8fd8886915/transformed/transition-1.6.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.window:window-core-android:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/cf910bbdb5778d6a8b50f345047fd14d/transformed/window-core/AndroidManifest.xml:5:5-44
+MERGED from [androidx.window:window-core-android:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/cf910bbdb5778d6a8b50f345047fd14d/transformed/window-core/AndroidManifest.xml:5:5-44
+MERGED from [androidx.window:window:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/84b14756d2e0c08862d5cdea9df25ddf/transformed/window-1.5.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.window:window:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/84b14756d2e0c08862d5cdea9df25ddf/transformed/window-1.5.0/AndroidManifest.xml:20:5-44
+MERGED from [io.coil-kt:coil:2.7.0] /home/banue/.gradle/caches/9.6.1/transforms/eb6709f3c94473f4bdabbdb0a4e6b08b/transformed/coil-2.7.0/AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil:2.7.0] /home/banue/.gradle/caches/9.6.1/transforms/eb6709f3c94473f4bdabbdb0a4e6b08b/transformed/coil-2.7.0/AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil-base:2.7.0] /home/banue/.gradle/caches/9.6.1/transforms/fc5dd47b5c8dd68a00fb8d431779c9c9/transformed/coil-base-2.7.0/AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil-base:2.7.0] /home/banue/.gradle/caches/9.6.1/transforms/fc5dd47b5c8dd68a00fb8d431779c9c9/transformed/coil-base-2.7.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.appcompat:appcompat-resources:1.6.1] /home/banue/.gradle/caches/9.6.1/transforms/38c70fe622f64ee5ee879f2a195b7f95/transformed/appcompat-resources-1.6.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.appcompat:appcompat-resources:1.6.1] /home/banue/.gradle/caches/9.6.1/transforms/38c70fe622f64ee5ee879f2a195b7f95/transformed/appcompat-resources-1.6.1/AndroidManifest.xml:20:5-44
+MERGED from [androidx.dynamicanimation:dynamicanimation:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/da5e237a963acf44366530653e3f3f7b/transformed/dynamicanimation-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.dynamicanimation:dynamicanimation:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/da5e237a963acf44366530653e3f3f7b/transformed/dynamicanimation-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] /home/banue/.gradle/caches/9.6.1/transforms/09668b0724b38985b3d117369a6010e8/transformed/vectordrawable-animated-1.1.0/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] /home/banue/.gradle/caches/9.6.1/transforms/09668b0724b38985b3d117369a6010e8/transformed/vectordrawable-animated-1.1.0/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] /home/banue/.gradle/caches/9.6.1/transforms/084cc12931812cb36c2c3a4d5557f6a4/transformed/vectordrawable-1.1.0/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] /home/banue/.gradle/caches/9.6.1/transforms/084cc12931812cb36c2c3a4d5557f6a4/transformed/vectordrawable-1.1.0/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.graphics:graphics-path:1.0.1] /home/banue/.gradle/caches/9.6.1/transforms/55d0e4cf308e25de4136f261c6b6b5c7/transformed/graphics-path-1.0.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.graphics:graphics-path:1.0.1] /home/banue/.gradle/caches/9.6.1/transforms/55d0e4cf308e25de4136f261c6b6b5c7/transformed/graphics-path-1.0.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/6a58b86454c1d4945b3233fb0f48f8b7/transformed/legacy-support-core-utils-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/6a58b86454c1d4945b3233fb0f48f8b7/transformed/legacy-support-core-utils-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/a1aacc33b856317c997438d904813c3a/transformed/loader-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/a1aacc33b856317c997438d904813c3a/transformed/loader-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/b6178b8cd30bfbcaeaab25020ed7c7b4/transformed/lifecycle-livedata-core-ktx-2.9.4/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/b6178b8cd30bfbcaeaab25020ed7c7b4/transformed/lifecycle-livedata-core-ktx-2.9.4/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/08e38cfad4062168e34825461061ddab/transformed/lifecycle-livedata-core-2.9.4/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/08e38cfad4062168e34825461061ddab/transformed/lifecycle-livedata-core-2.9.4/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/9b136f8113309e218420e4b533b08267/transformed/lifecycle-livedata-2.9.4/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/9b136f8113309e218420e4b533b08267/transformed/lifecycle-livedata-2.9.4/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/84d07400b0ea8fec0675874a19d9425a/transformed/lifecycle-viewmodel-2.9.4/AndroidManifest.xml:4:5-43
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/84d07400b0ea8fec0675874a19d9425a/transformed/lifecycle-viewmodel-2.9.4/AndroidManifest.xml:4:5-43
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c88af4a695f60bb39b0020bb85fe3e3b/transformed/lifecycle-viewmodel-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c88af4a695f60bb39b0020bb85fe3e3b/transformed/lifecycle-viewmodel-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/9db7dac353dbb18a5fbef20cdf4a2d6c/transformed/lifecycle-runtime-ktx/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/9db7dac353dbb18a5fbef20cdf4a2d6c/transformed/lifecycle-runtime-ktx/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/346f71ca574a230298d7b17dd650495f/transformed/lifecycle-runtime-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/346f71ca574a230298d7b17dd650495f/transformed/lifecycle-runtime-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-process:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c00e447a7eeee1699de25d6e838e2434/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:21:5-44
+MERGED from [androidx.lifecycle:lifecycle-process:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c00e447a7eeee1699de25d6e838e2434/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:21:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/11c5d43231617f7c80a29c79fb47d196/transformed/lifecycle-viewmodel-ktx-2.9.4/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/11c5d43231617f7c80a29c79fb47d196/transformed/lifecycle-viewmodel-ktx-2.9.4/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/7b1b2b1352f833fd1724c3969a786eed/transformed/lifecycle-viewmodel-savedstate-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/7b1b2b1352f833fd1724c3969a786eed/transformed/lifecycle-viewmodel-savedstate-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate-android:1.3.2] /home/banue/.gradle/caches/9.6.1/transforms/dea845823804b7a66a17cdf475141b0f/transformed/savedstate-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate-android:1.3.2] /home/banue/.gradle/caches/9.6.1/transforms/dea845823804b7a66a17cdf475141b0f/transformed/savedstate-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate-ktx:1.3.2] /home/banue/.gradle/caches/9.6.1/transforms/0f7d076af29df0fe4ce33c7c97047eed/transformed/savedstate-ktx-1.3.2/AndroidManifest.xml:5:5-44
+MERGED from [androidx.savedstate:savedstate-ktx:1.3.2] /home/banue/.gradle/caches/9.6.1/transforms/0f7d076af29df0fe4ce33c7c97047eed/transformed/savedstate-ktx-1.3.2/AndroidManifest.xml:5:5-44
+MERGED from [androidx.savedstate:savedstate-compose-android:1.3.2] /home/banue/.gradle/caches/9.6.1/transforms/9d41b57f455dd3b14ec3994ae921eeb1/transformed/savedstate-compose/AndroidManifest.xml:5:5-44
+MERGED from [androidx.savedstate:savedstate-compose-android:1.3.2] /home/banue/.gradle/caches/9.6.1/transforms/9d41b57f455dd3b14ec3994ae921eeb1/transformed/savedstate-compose/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/ce0049cb8190797c42647d2c8e6c08a1/transformed/runtime/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/ce0049cb8190797c42647d2c8e6c08a1/transformed/runtime/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-saveable-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/8bd5492d39038a7ce80b229a49712cb0/transformed/runtime-saveable/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-saveable-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/8bd5492d39038a7ce80b229a49712cb0/transformed/runtime-saveable/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-compose-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/336f42f048f80718f4a8fb05d1b70e92/transformed/lifecycle-runtime-compose-release/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-compose-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/336f42f048f80718f4a8fb05d1b70e92/transformed/lifecycle-runtime-compose-release/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-compose-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/13e7b5fd9cfbff919158547e31268327/transformed/lifecycle-viewmodel-compose-release/AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-compose-android:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/13e7b5fd9cfbff919158547e31268327/transformed/lifecycle-viewmodel-compose-release/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/fb45c4b59304dac966e0fb4995f4454b/transformed/ui/AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/fb45c4b59304dac966e0fb4995f4454b/transformed/ui/AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-ktx:1.10.1] /home/banue/.gradle/caches/9.6.1/transforms/df3331ad69ec2f7183ec39406c861312/transformed/activity-ktx-1.10.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-ktx:1.10.1] /home/banue/.gradle/caches/9.6.1/transforms/df3331ad69ec2f7183ec39406c861312/transformed/activity-ktx-1.10.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-compose:1.10.1] /home/banue/.gradle/caches/9.6.1/transforms/aa9da6ea12bd7d09397d4ed11c893a0d/transformed/activity-compose-1.10.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-compose:1.10.1] /home/banue/.gradle/caches/9.6.1/transforms/aa9da6ea12bd7d09397d4ed11c893a0d/transformed/activity-compose-1.10.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/fe5eb0b32b59385ee5915e5335a7e022/transformed/customview-poolingcontainer-1.0.0/AndroidManifest.xml:20:5-21:38
+MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/fe5eb0b32b59385ee5915e5335a7e022/transformed/customview-poolingcontainer-1.0.0/AndroidManifest.xml:20:5-21:38
+MERGED from [androidx.core:core-ktx:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/edf7d5cd36de7346da15d989498c7933/transformed/core-ktx-1.16.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-ktx:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/edf7d5cd36de7346da15d989498c7933/transformed/core-ktx-1.16.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-core-android:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/be07b5f03efa4287a7c9d98509d0f9ce/transformed/datastore-core-release/AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-core-android:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/be07b5f03efa4287a7c9d98509d0f9ce/transformed/datastore-core-release/AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-android:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/8456d590798a6a569204709a0f6107dc/transformed/datastore-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-android:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/8456d590798a6a569204709a0f6107dc/transformed/datastore-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/067319044d1d1851f661f9b2e11333c4/transformed/datastore-preferences-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/067319044d1d1851f661f9b2e11333c4/transformed/datastore-preferences-release/AndroidManifest.xml:20:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] /home/banue/.gradle/caches/9.6.1/transforms/26d997ff68780d2441f132e18c6463c6/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] /home/banue/.gradle/caches/9.6.1/transforms/26d997ff68780d2441f132e18c6463c6/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-viewtree:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/14fc991bdfa2b2700f40eb0d4857bd97/transformed/core-viewtree-1.0.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-viewtree:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/14fc991bdfa2b2700f40eb0d4857bd97/transformed/core-viewtree-1.0.0/AndroidManifest.xml:5:5-44
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/3dcec5459fb7df8657e8fd83ae823306/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/3dcec5459fb7df8657e8fd83ae823306/transformed/versionedparcelable-1.1.1/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.interpolator:interpolator:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/f15ded658e59fb1e41a732f0fbc71909/transformed/interpolator-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/f15ded658e59fb1e41a732f0fbc71909/transformed/interpolator-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:21:5-44
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:21:5-44
+MERGED from [androidx.startup:startup-runtime:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/2eb25e5d93ef4e0ab9bfb2b73b314413/transformed/startup-runtime-1.1.1/AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.startup:startup-runtime:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/2eb25e5d93ef4e0ab9bfb2b73b314413/transformed/startup-runtime-1.1.1/AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.tracing:tracing:1.2.0] /home/banue/.gradle/caches/9.6.1/transforms/eee3964196835eb8ee8972685c6e1798/transformed/tracing-1.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.tracing:tracing:1.2.0] /home/banue/.gradle/caches/9.6.1/transforms/eee3964196835eb8ee8972685c6e1798/transformed/tracing-1.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.exifinterface:exifinterface:1.3.7] /home/banue/.gradle/caches/9.6.1/transforms/2dc0f053a84a26a0e19a059bee0b9961/transformed/exifinterface-1.3.7/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.exifinterface:exifinterface:1.3.7] /home/banue/.gradle/caches/9.6.1/transforms/2dc0f053a84a26a0e19a059bee0b9961/transformed/exifinterface-1.3.7/AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.documentfile:documentfile:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/3100b2fdc197adac925db2371303ee59/transformed/documentfile-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.documentfile:documentfile:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/3100b2fdc197adac925db2371303ee59/transformed/documentfile-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/4704ff983b48ebc5cbdec7e1acf48bcb/transformed/localbroadcastmanager-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/4704ff983b48ebc5cbdec7e1acf48bcb/transformed/localbroadcastmanager-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.print:print:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/35a1bd20386a57fc9ae456463c27a59a/transformed/print-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.print:print:1.0.0] /home/banue/.gradle/caches/9.6.1/transforms/35a1bd20386a57fc9ae456463c27a59a/transformed/print-1.0.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.2.0] /home/banue/.gradle/caches/9.6.1/transforms/4fab353d7a65b6623f4e8dbf7078a64b/transformed/core-runtime-2.2.0/AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.2.0] /home/banue/.gradle/caches/9.6.1/transforms/4fab353d7a65b6623f4e8dbf7078a64b/transformed/core-runtime-2.2.0/AndroidManifest.xml:20:5-44
+	android:targetSdkVersion
+		INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /home/banue/metro-anime/app/src/main/AndroidManifest.xml
+activity#androidx.compose.ui.tooling.PreviewActivity
+ADDED from [androidx.compose.ui:ui-tooling-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/368f87c21e76c58faa284fc99cbc93af/transformed/ui-tooling/AndroidManifest.xml:23:9-25:39
+	android:exported
+		ADDED from [androidx.compose.ui:ui-tooling-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/368f87c21e76c58faa284fc99cbc93af/transformed/ui-tooling/AndroidManifest.xml:25:13-36
+	android:name
+		ADDED from [androidx.compose.ui:ui-tooling-android:1.11.4] /home/banue/.gradle/caches/9.6.1/transforms/368f87c21e76c58faa284fc99cbc93af/transformed/ui-tooling/AndroidManifest.xml:24:13-71
+provider#androidx.startup.InitializationProvider
+ADDED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.lifecycle:lifecycle-process:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c00e447a7eeee1699de25d6e838e2434/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.lifecycle:lifecycle-process:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c00e447a7eeee1699de25d6e838e2434/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.startup:startup-runtime:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/2eb25e5d93ef4e0ab9bfb2b73b314413/transformed/startup-runtime-1.1.1/AndroidManifest.xml:26:9-30:34
+MERGED from [androidx.startup:startup-runtime:1.1.1] /home/banue/.gradle/caches/9.6.1/transforms/2eb25e5d93ef4e0ab9bfb2b73b314413/transformed/startup-runtime-1.1.1/AndroidManifest.xml:26:9-30:34
+	tools:node
+		ADDED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:28:13-31
+	android:authorities
+		ADDED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:26:13-68
+	android:exported
+		ADDED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:27:13-37
+	android:name
+		ADDED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:25:13-67
+meta-data#androidx.emoji2.text.EmojiCompatInitializer
+ADDED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.emoji2:emoji2:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/c15efd79b076ba4699849c79d34e81a9/transformed/emoji2-1.4.0/AndroidManifest.xml:30:17-75
+uses-library#androidx.window.extensions
+ADDED from [androidx.window:window:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/84b14756d2e0c08862d5cdea9df25ddf/transformed/window-1.5.0/AndroidManifest.xml:23:9-25:40
+	android:required
+		ADDED from [androidx.window:window:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/84b14756d2e0c08862d5cdea9df25ddf/transformed/window-1.5.0/AndroidManifest.xml:25:13-37
+	android:name
+		ADDED from [androidx.window:window:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/84b14756d2e0c08862d5cdea9df25ddf/transformed/window-1.5.0/AndroidManifest.xml:24:13-54
+uses-library#androidx.window.sidecar
+ADDED from [androidx.window:window:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/84b14756d2e0c08862d5cdea9df25ddf/transformed/window-1.5.0/AndroidManifest.xml:26:9-28:40
+	android:required
+		ADDED from [androidx.window:window:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/84b14756d2e0c08862d5cdea9df25ddf/transformed/window-1.5.0/AndroidManifest.xml:28:13-37
+	android:name
+		ADDED from [androidx.window:window:1.5.0] /home/banue/.gradle/caches/9.6.1/transforms/84b14756d2e0c08862d5cdea9df25ddf/transformed/window-1.5.0/AndroidManifest.xml:27:13-51
+permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:22:5-24:47
+	android:protectionLevel
+		ADDED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:24:9-44
+	android:name
+		ADDED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:23:9-81
+permission#dev.metro.anime.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:22:5-24:47
+	android:protectionLevel
+		ADDED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:24:9-44
+	android:name
+		ADDED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:23:9-81
+uses-permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:26:5-97
+	android:name
+		ADDED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:26:22-94
+uses-permission#dev.metro.anime.debug.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:26:5-97
+	android:name
+		ADDED from [androidx.core:core:1.16.0] /home/banue/.gradle/caches/9.6.1/transforms/5e3329a220831442fc789e7ff120c800/transformed/core-1.16.0/AndroidManifest.xml:26:22-94
+meta-data#androidx.lifecycle.ProcessLifecycleInitializer
+ADDED from [androidx.lifecycle:lifecycle-process:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c00e447a7eeee1699de25d6e838e2434/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.lifecycle:lifecycle-process:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c00e447a7eeee1699de25d6e838e2434/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.lifecycle:lifecycle-process:2.9.4] /home/banue/.gradle/caches/9.6.1/transforms/c00e447a7eeee1699de25d6e838e2434/transformed/lifecycle-process-2.9.4/AndroidManifest.xml:30:17-78
+meta-data#androidx.profileinstaller.ProfileInstallerInitializer
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
+receiver#androidx.profileinstaller.ProfileInstallReceiver
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
+	android:enabled
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
+	android:exported
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
+	android:permission
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
+	android:directBootAware
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
+intent-filter#action:name:androidx.profileinstaller.action.INSTALL_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
+action#androidx.profileinstaller.action.INSTALL_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
+intent-filter#action:name:androidx.profileinstaller.action.SKIP_FILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
+action#androidx.profileinstaller.action.SKIP_FILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
+intent-filter#action:name:androidx.profileinstaller.action.SAVE_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
+action#androidx.profileinstaller.action.SAVE_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
+intent-filter#action:name:androidx.profileinstaller.action.BENCHMARK_OPERATION
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
+action#androidx.profileinstaller.action.BENCHMARK_OPERATION
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] /home/banue/.gradle/caches/9.6.1/transforms/6a78de569be5e72d4716531325d46266/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
