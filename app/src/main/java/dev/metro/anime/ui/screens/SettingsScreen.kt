@@ -4,9 +4,11 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.res.painterResource
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -120,6 +122,9 @@ fun SettingsScreen(
     var cacheSizeBytes by remember { mutableLongStateOf(0L) }
     var isClearingCache by remember { mutableStateOf(false) }
     var cacheClearedMsg by remember { mutableStateOf(false) }
+
+    var serostClickCount by remember { mutableIntStateOf(0) }
+    var lastSerostClickTime by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(Unit) {
         cacheSizeBytes = updateRepo.getCacheSizeBytes()
@@ -581,24 +586,33 @@ fun SettingsScreen(
                                 .background(scheme.accent.copy(alpha = 0.85f)),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp),
-                            )
+                            if (settings.serostMode) {
+                                Image(
+                                    painter = painterResource(dev.metro.anime.R.drawable.serost_cat),
+                                    contentDescription = "Серость",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "Плитка в стиле Metro",
+                                text = if (settings.serostMode) "Плитка в стиле Серости" else "Плитка в стиле Metro",
                                 fontFamily = MetroFonts.headline,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp,
                                 color = scheme.text,
                             )
                             Text(
-                                text = "Акцент, полупрозрачный акрил и шрифт Segoe UI",
+                                text = if (settings.serostMode) "Самый серый и пушистый режим 🐱" else "Акцент, полупрозрачный акрил и шрифт Segoe UI",
                                 fontFamily = MetroFonts.text,
                                 fontSize = 12.sp,
                                 color = scheme.accent,
@@ -1115,25 +1129,72 @@ fun SettingsScreen(
             // =================================================================
             item {
                 Spacer(modifier = Modifier.height(10.dp))
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(MetroDimens.radius))
+                        .background(if (settings.serostMode) scheme.glassHover else Color.Transparent)
+                        .border(
+                            width = if (settings.serostMode) 1.dp else 0.dp,
+                            color = if (settings.serostMode) scheme.accent.copy(alpha = 0.5f) else Color.Transparent,
+                            shape = RoundedCornerShape(MetroDimens.radius),
+                        )
+                        .metroClickable(
+                            targetScale = 0.96f,
+                            onClick = {
+                                val now = System.currentTimeMillis()
+                                if (now - lastSerostClickTime > 1500L) {
+                                    serostClickCount = 1
+                                } else {
+                                    serostClickCount++
+                                }
+                                lastSerostClickTime = now
+
+                                if (serostClickCount >= 5) {
+                                    serostClickCount = 0
+                                    scope.launch {
+                                        val newState = settingsRepo.toggleSerostMode()
+                                        val text = if (newState) "Серость активирована 🐱" else "Серость отключена"
+                                        Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                        )
+                        .padding(vertical = 12.dp, horizontal = 16.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = "METRO ANIME",
-                        fontFamily = MetroFonts.headline,
-                        fontWeight = FontWeight.Light,
-                        fontSize = 18.sp,
-                        letterSpacing = 2.sp,
-                        color = scheme.text,
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Версия ${BuildConfig.VERSION_NAME} • Quickshell Fluent Style",
-                        fontFamily = MetroFonts.text,
-                        fontSize = 12.sp,
-                        color = scheme.textDim,
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        if (settings.serostMode) {
+                            Image(
+                                painter = painterResource(dev.metro.anime.R.drawable.serost_cat),
+                                contentDescription = "Серость",
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(CircleShape)
+                                    .border(1.5.dp, scheme.accent, CircleShape),
+                                contentScale = ContentScale.Crop,
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        Text(
+                            text = if (settings.serostMode) "СЕРОСТЬ АНИМЕ 🐱" else "METRO ANIME",
+                            fontFamily = MetroFonts.headline,
+                            fontWeight = FontWeight.Light,
+                            fontSize = 18.sp,
+                            letterSpacing = 2.sp,
+                            color = scheme.text,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Версия ${BuildConfig.VERSION_NAME} • Quickshell Fluent Style",
+                            fontFamily = MetroFonts.text,
+                            fontSize = 12.sp,
+                            color = if (settings.serostMode) scheme.accent else scheme.textDim,
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(20.dp))
             }

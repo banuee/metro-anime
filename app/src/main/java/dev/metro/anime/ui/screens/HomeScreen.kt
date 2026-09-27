@@ -415,6 +415,8 @@ fun HistoryItemCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // Poster
+                val isSerost = dev.metro.anime.ui.theme.LocalSerostMode.current
+                val historyPosterModel: Any? = if (isSerost) dev.metro.anime.R.drawable.serost_cat else item.anime.posterUrl
                 Box(
                     modifier = Modifier
                         .width(60.dp)
@@ -424,7 +426,7 @@ fun HistoryItemCard(
                 ) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(item.anime.posterUrl)
+                            .data(historyPosterModel)
                             .crossfade(true)
                             .size(180, 250)
                             .build(),

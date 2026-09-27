@@ -117,13 +117,16 @@ fun DetailsScreen(
             ) {
                 // Header Banner with Poster
                 item {
+                    val isSerost = dev.metro.anime.ui.theme.LocalSerostMode.current
+                    val detailsPosterData: Any? = if (isSerost) dev.metro.anime.R.drawable.serost_cat else anime.posterUrl
+
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(280.dp),
                     ) {
                         AsyncImage(
-                            model = anime.posterUrl,
+                            model = detailsPosterData,
                             contentDescription = anime.titleRu,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
@@ -160,7 +163,7 @@ fun DetailsScreen(
                                     .border(MetroDimens.strokeWidth, scheme.strokeStrong, RoundedCornerShape(MetroDimens.radiusSmall)),
                             ) {
                                 AsyncImage(
-                                    model = anime.posterUrl,
+                                    model = detailsPosterData,
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize(),

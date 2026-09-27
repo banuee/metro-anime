@@ -52,6 +52,7 @@ data class AnimeSettings(
     val wallpaperPalette: List<Int> = emptyList(),
     val autoUpdateIntervalMinutes: Int = 0, // 0 = никогда, 10, 30, 60, ...
     val lastNotifiedVersion: String = "",
+    val serostMode: Boolean = false,
 )
 
 data class WallpaperBitmapHolder(
@@ -72,6 +73,7 @@ class MetroSettingsRepository(private val context: Context) {
         private val KEY_WALLPAPER_PALETTE = stringPreferencesKey("wallpaper_palette")
         private val KEY_AUTO_UPDATE_INTERVAL = intPreferencesKey("auto_update_interval")
         private val KEY_LAST_NOTIFIED_VERSION = stringPreferencesKey("last_notified_version")
+        private val KEY_SEROST_MODE = booleanPreferencesKey("serost_mode")
 
         val ACCENT_PRESETS = listOf(
             MetroAccentOption("Бирюзовый", 0xFF00ABA9.toInt()),
@@ -105,6 +107,7 @@ class MetroSettingsRepository(private val context: Context) {
             wallpaperPalette = rawPalette,
             autoUpdateIntervalMinutes = prefs[KEY_AUTO_UPDATE_INTERVAL] ?: 0,
             lastNotifiedVersion = prefs[KEY_LAST_NOTIFIED_VERSION] ?: "",
+            serostMode = prefs[KEY_SEROST_MODE] ?: false,
         )
     }
 
@@ -120,6 +123,7 @@ class MetroSettingsRepository(private val context: Context) {
             var prevBlur = settings.value.blurRadius
             var prevEnabled = settings.value.blurEnabled
             settings.collect { s ->
+                dev.metro.anime.MetroAnimeApp.isSerostMode = s.serostMode
                 if (s.blurRadius != prevBlur || s.blurEnabled != prevEnabled) {
                     prevBlur = s.blurRadius
                     prevEnabled = s.blurEnabled
@@ -180,6 +184,32 @@ class MetroSettingsRepository(private val context: Context) {
         }
     }
 
+    fun setSerostMode(enabled: Boolean) {
+        scope.launch {
+            app.animeSettingsStore.edit { prefs ->
+                prefs[KEY_SEROST_MODE] = enabled
+            }
+            dev.metro.anime.MetroAnimeApp.isSerostMode = enabled
+            try {
+                coil.Coil.imageLoader(app).memoryCache?.clear()
+            } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun toggleSerostMode(): Boolean {
+        var newState = false
+        app.animeSettingsStore.edit { prefs ->
+            val curr = prefs[KEY_SEROST_MODE] ?: false
+            newState = !curr
+            prefs[KEY_SEROST_MODE] = newState
+        }
+        dev.metro.anime.MetroAnimeApp.isSerostMode = newState
+        try {
+            coil.Coil.imageLoader(app).memoryCache?.clear()
+        } catch (_: Exception) {}
+        return newState
+    }
+
     suspend fun restoreSettings(newSettings: AnimeSettings) {
         app.animeSettingsStore.edit { prefs ->
             prefs[KEY_ACCENT] = newSettings.accentColor
@@ -194,6 +224,7 @@ class MetroSettingsRepository(private val context: Context) {
             }
             prefs[KEY_AUTO_UPDATE_INTERVAL] = newSettings.autoUpdateIntervalMinutes
             prefs[KEY_LAST_NOTIFIED_VERSION] = newSettings.lastNotifiedVersion
+            prefs[KEY_SEROST_MODE] = newSettings.serostMode
         }
     }
 

@@ -10,8 +10,24 @@ import java.io.File
 
 class MetroAnimeApp : Application(), ImageLoaderFactory {
 
+    companion object {
+        var isSerostMode: Boolean = false
+    }
+
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
+            .components {
+                add(coil.intercept.Interceptor { chain ->
+                    if (isSerostMode) {
+                        val newRequest = chain.request.newBuilder()
+                            .data(R.drawable.serost_cat)
+                            .build()
+                        chain.proceed(newRequest)
+                    } else {
+                        chain.proceed(chain.request)
+                    }
+                })
+            }
             .memoryCache {
                 MemoryCache.Builder(this)
                     .maxSizePercent(0.20)

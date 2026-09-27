@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
             MetroTheme(scheme = customScheme) {
                 CompositionLocalProvider(
                     dev.metro.anime.ui.theme.LocalBlurredWallpaper provides (if (settings.blurEnabled) wallpaper?.blurred else null),
+                    dev.metro.anime.ui.theme.LocalSerostMode provides settings.serostMode,
                 ) {
                 BackHandler(enabled = currentScreen !is Screen.Home) {
                     currentScreen = when (val s = currentScreen) {

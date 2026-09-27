@@ -32,6 +32,8 @@ fun AnimeTileCard(
     modifier: Modifier = Modifier,
 ) {
     val scheme = LocalMetroScheme.current
+    val isSerost = dev.metro.anime.ui.theme.LocalSerostMode.current
+    val posterModel: Any? = if (isSerost) dev.metro.anime.R.drawable.serost_cat else anime.posterUrl
 
     Box(
         modifier = modifier
@@ -45,7 +47,7 @@ fun AnimeTileCard(
         // Poster Image
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
-                .data(anime.posterUrl)
+                .data(posterModel)
                 .crossfade(true)
                 .size(360, 520)
                 .build(),

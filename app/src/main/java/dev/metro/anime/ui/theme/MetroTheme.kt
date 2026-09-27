@@ -37,6 +37,9 @@ data class MetroScheme(
 val LocalMetroScheme: ProvidableCompositionLocal<MetroScheme> =
     compositionLocalOf { MetroScheme() }
 
+val LocalSerostMode: ProvidableCompositionLocal<Boolean> =
+    compositionLocalOf { false }
+
 @Composable
 fun MetroTheme(
     scheme: MetroScheme = MetroScheme(),
