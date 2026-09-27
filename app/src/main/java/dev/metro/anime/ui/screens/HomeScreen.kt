@@ -283,8 +283,9 @@ fun HomeScreen(
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
+                                            val posText = if (last.positionMs == 0L) "Новая серия" else "${formatMinSec(last.positionMs)} / ${formatMinSec(last.durationMs)}"
                                             Text(
-                                                text = "Серия ${last.episodeOrdinal} • ${formatMinSec(last.positionMs)} / ${formatMinSec(last.durationMs)}",
+                                                text = "Серия ${last.episodeOrdinal} • $posText",
                                                 fontFamily = MetroFonts.text,
                                                 fontSize = 11.sp,
                                                 color = scheme.accent,
@@ -458,8 +459,9 @@ fun HistoryItemCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(modifier = Modifier.height(2.dp))
+                    val timeText = if (item.positionMs == 0L) "Новая серия" else "${formatMinSec(item.positionMs)} / ${formatMinSec(item.durationMs)}"
                     Text(
-                        text = "${item.dubbingTitle} • ${formatMinSec(item.positionMs)} / ${formatMinSec(item.durationMs)}",
+                        text = "${item.dubbingTitle} • $timeText",
                         fontFamily = MetroFonts.text,
                         fontSize = 11.sp,
                         color = scheme.textDim,

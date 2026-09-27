@@ -508,4 +508,48 @@ object ApiClient {
         }
         return null
     }
+
+    // =========================================================================
+    // AniSkip API v2 (Openings & Endings timestamps)
+    // =========================================================================
+
+    suspend fun fetchAniSkip(malId: Long, episodeOrdinal: Int, durationSec: Int = 0): Pair<SkipTimestamps?, SkipTimestamps?>? = withContext(Dispatchers.IO) {
+        val url = "https://api.aniskip.com/v2/skip-times/$malId/$episodeOrdinal?types[]=op&types[]=ed&types[]=mixed-op&types[]=mixed-ed&episodeLength=$durationSec"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "MetroAnime/1.0")
+            .build()
+
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                val body = response.body?.string() ?: return@withContext null
+                val root = gson.fromJson(body, JsonObject::class.java) ?: return@withContext null
+                if (root.get("found")?.asBoolean != true) return@withContext null
+
+                val results = root.getAsJsonArray("results") ?: return@withContext null
+                var opening: SkipTimestamps? = null
+                var ending: SkipTimestamps? = null
+
+                for (elem in results) {
+                    val resObj = elem.asJsonObject
+                    val skipType = resObj.get("skipType")?.asString ?: continue
+                    val interval = resObj.getAsJsonObject("interval") ?: continue
+                    val start = interval.get("startTime")?.asDouble?.toInt() ?: continue
+                    val end = interval.get("endTime")?.asDouble?.toInt() ?: continue
+
+                    if (skipType == "op" || (skipType == "mixed-op" && opening == null)) {
+                        opening = SkipTimestamps(start, end)
+                    } else if (skipType == "ed" || (skipType == "mixed-ed" && ending == null)) {
+                        ending = SkipTimestamps(start, end)
+                    }
+                }
+
+                Pair(opening, ending)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "AniSkip error for MAL $malId ep $episodeOrdinal: ${e.message}")
+            null
+        }
+    }
 }

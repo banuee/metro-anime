@@ -115,19 +115,61 @@ fun PlayerScreen(
 
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
 
+    var activeOpening by remember(episode) { mutableStateOf(episode.opening) }
+    var activeEnding by remember(episode) { mutableStateOf(episode.ending) }
+
+    LaunchedEffect(episode, anime.shikimoriId) {
+        if ((activeOpening == null || activeEnding == null) && anime.shikimoriId != null && anime.shikimoriId > 0) {
+            val skipPair = dev.metro.anime.data.api.ApiClient.fetchAniSkip(
+                malId = anime.shikimoriId,
+                episodeOrdinal = episode.ordinal,
+                durationSec = episode.durationSec ?: (durationMs / 1000).toInt(),
+            )
+            if (skipPair != null) {
+                if (activeOpening == null && skipPair.first != null) {
+                    activeOpening = skipPair.first
+                }
+                if (activeEnding == null && skipPair.second != null) {
+                    activeEnding = skipPair.second
+                }
+            }
+        }
+    }
+
     fun saveCurrentProgress() {
         if (currentPositionMs > 3000L && durationMs > 10000L) {
-            repository.saveProgress(
-                dev.metro.anime.data.model.WatchProgress(
-                    anime = anime,
-                    episodeOrdinal = episode.ordinal,
-                    episodeName = episode.name,
-                    dubbingTitle = dubbingTitle.ifBlank { source.label },
-                    source = source,
-                    positionMs = currentPositionMs,
-                    durationMs = durationMs,
+            val ed = activeEnding
+            val isNearEndOrEnding = when {
+                ed != null && currentPositionMs >= (ed.startSec - 10) * 1000L -> true
+                durationMs > 60_000L && currentPositionMs >= durationMs - 45_000L -> true
+                else -> false
+            }
+
+            if (isNearEndOrEnding && nextEpisode != null) {
+                repository.saveProgress(
+                    dev.metro.anime.data.model.WatchProgress(
+                        anime = anime,
+                        episodeOrdinal = nextEpisode.ordinal,
+                        episodeName = nextEpisode.name,
+                        dubbingTitle = dubbingTitle.ifBlank { source.label },
+                        source = source,
+                        positionMs = 0L,
+                        durationMs = 0L,
+                    )
                 )
-            )
+            } else {
+                repository.saveProgress(
+                    dev.metro.anime.data.model.WatchProgress(
+                        anime = anime,
+                        episodeOrdinal = episode.ordinal,
+                        episodeName = episode.name,
+                        dubbingTitle = dubbingTitle.ifBlank { source.label },
+                        source = source,
+                        positionMs = currentPositionMs,
+                        durationMs = durationMs,
+                    )
+                )
+            }
         }
     }
 
@@ -553,52 +595,60 @@ fun PlayerScreen(
         // Skip Opening / Ending Button
         // =====================================================================
         val curSec = (currentPositionMs / 1000).toInt()
-        val op = episode.opening
-        val ed = episode.ending
-        val showSkip = when {
-            op != null && curSec in op.startSec..op.endSec -> true
-            ed != null && curSec in ed.startSec..ed.endSec -> true
-            else -> false
-        }
+        val op = activeOpening
+        val ed = activeEnding
+        val isOp = op != null && curSec in op.startSec..op.endSec
+        val isEd = ed != null && curSec in ed.startSec..ed.endSec
+
+        val showSkip = isOp || isEd
         val skipTargetSec = when {
-            op != null && curSec in op.startSec..op.endSec -> op.endSec
-            ed != null && curSec in ed.startSec..ed.endSec -> ed.endSec
+            isOp -> op?.endSec
+            isEd -> ed?.endSec
             else -> null
+        }
+        val skipLabel = when {
+            isOp -> "Пропустить опенинг"
+            isEd && nextEpisode != null -> "Следующая серия"
+            isEd -> "Пропустить эндинг"
+            else -> "Пропустить заставку"
         }
 
         AnimatedVisibility(
-            visible = showSkip && skipTargetSec != null && !isControlsLocked,
+            visible = showSkip && (skipTargetSec != null || (isEd && nextEpisode != null)) && !isControlsLocked,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(bottom = 76.dp, end = 24.dp),
         ) {
-            if (skipTargetSec != null) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                        .background(Color(0xFF101016).copy(alpha = 0.65f))
-                        .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
-                        .metroClickable {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                    .background(Color(0xFF101016).copy(alpha = 0.65f))
+                    .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
+                    .metroClickable {
+                        if (isEd && nextEpisode != null) {
+                            saveCurrentProgress()
+                            onNextEpisodeClick?.invoke(nextEpisode)
+                        } else if (skipTargetSec != null) {
                             exoPlayer.seekTo(skipTargetSec * 1000L)
                         }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Пропустить заставку",
-                            fontFamily = MetroFonts.headline,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = scheme.accent,
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Default.FastForward,
-                            contentDescription = null,
-                            tint = scheme.accent,
-                            modifier = Modifier.size(16.dp),
-                        )
                     }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = skipLabel,
+                        fontFamily = MetroFonts.headline,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = scheme.accent,
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Default.FastForward,
+                        contentDescription = null,
+                        tint = scheme.accent,
+                        modifier = Modifier.size(16.dp),
+                    )
                 }
             }
         }

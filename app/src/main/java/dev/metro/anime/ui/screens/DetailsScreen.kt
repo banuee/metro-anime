@@ -215,20 +215,30 @@ fun DetailsScreen(
                 // Continue Watching Hero Button (if previously watched)
                 if (watchProgress != null) {
                     item {
+                        val currentTargetEp = episodes.find { it.ordinal == watchProgress.episodeOrdinal }
+                        val isNearEnd = currentTargetEp != null && (
+                            (currentTargetEp.ending != null && watchProgress.positionMs >= (currentTargetEp.ending.startSec - 10) * 1000L) ||
+                            (watchProgress.durationMs > 60_000L && watchProgress.positionMs >= watchProgress.durationMs - 45_000L)
+                        )
+                        val nextEp = episodes.find { it.ordinal == watchProgress.episodeOrdinal + 1 }
+                        val (targetEp, targetPositionMs, isNewEpisode) = when {
+                            isNearEnd && nextEp != null -> Triple(nextEp, 0L, true)
+                            watchProgress.positionMs == 0L -> Triple(currentTargetEp ?: episodes.firstOrNull(), 0L, true)
+                            else -> Triple(currentTargetEp ?: episodes.firstOrNull(), watchProgress.positionMs, false)
+                        }
+
                         FrostedGlassBox(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                                 .metroClickable {
-                                    val targetEp = episodes.find { it.ordinal == watchProgress.episodeOrdinal }
-                                        ?: episodes.firstOrNull()
                                     if (targetEp != null && activeDub != null) {
                                         onPlayEpisode(
                                             targetEp,
                                             activeDub.source,
                                             anime,
                                             activeDub.title,
-                                            watchProgress.positionMs,
+                                            targetPositionMs,
                                             episodes,
                                         )
                                     }
@@ -269,8 +279,13 @@ fun DetailsScreen(
                                         color = scheme.accent,
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
+                                    val subtitle = if (isNewEpisode) {
+                                        "Серия ${targetEp?.ordinal ?: watchProgress.episodeOrdinal} • Новая серия"
+                                    } else {
+                                        "Серия ${watchProgress.episodeOrdinal} • ${formatMinSec(watchProgress.positionMs)} / ${formatMinSec(watchProgress.durationMs)}"
+                                    }
                                     Text(
-                                        text = "Серия ${watchProgress.episodeOrdinal} • ${formatMinSec(watchProgress.positionMs)} / ${formatMinSec(watchProgress.durationMs)}",
+                                        text = subtitle,
                                         fontFamily = MetroFonts.text,
                                         fontSize = 13.sp,
                                         color = scheme.text,
