@@ -58,8 +58,9 @@ fun DetailsScreen(
     val isBookmarked = remember(bookmarks, anime.id) {
         bookmarks.any { it.id == anime.id }
     }
-    val watchProgress = remember(anime.id) {
-        repository.getProgress(anime.id)
+    val history by repository.history.collectAsState()
+    val watchProgress = remember(history, anime.id) {
+        history.find { it.anime.id == anime.id } ?: repository.getProgress(anime.id)
     }
 
     LaunchedEffect(anime.id) {
@@ -68,8 +69,18 @@ fun DetailsScreen(
         details = loaded
         // Match active dubbing to previously watched if present
         val saved = repository.getProgress(anime.id)
-        if (saved != null && loaded != null) {
-            val idx = loaded.dubbings.indexOfFirst { it.title.equals(saved.dubbingTitle, ignoreCase = true) }
+        if (saved != null && loaded != null && loaded.dubbings.isNotEmpty()) {
+            fun cleanDubTitle(t: String): String = t.replace(Regex("\\s*\\(.*\\)"), "").trim().lowercase()
+            var idx = loaded.dubbings.indexOfFirst { it.title.equals(saved.dubbingTitle, ignoreCase = true) }
+            if (idx < 0) {
+                idx = loaded.dubbings.indexOfFirst { cleanDubTitle(it.title) == cleanDubTitle(saved.dubbingTitle) }
+            }
+            if (idx < 0) {
+                idx = loaded.dubbings.indexOfFirst { it.source == saved.source && it.episodes.any { ep -> ep.ordinal == saved.episodeOrdinal } }
+            }
+            if (idx < 0) {
+                idx = loaded.dubbings.indexOfFirst { it.episodes.any { ep -> ep.ordinal == saved.episodeOrdinal } }
+            }
             if (idx >= 0) {
                 selectedDubIndex = idx
             }
@@ -215,31 +226,45 @@ fun DetailsScreen(
                 // Continue Watching Hero Button (if previously watched)
                 if (watchProgress != null) {
                     item {
-                        val currentTargetEp = episodes.find { it.ordinal == watchProgress.episodeOrdinal }
+                        val currentTargetIndex = episodes.indexOfFirst { it.ordinal == watchProgress.episodeOrdinal }
+                        val currentTargetEp = if (currentTargetIndex >= 0) episodes[currentTargetIndex] else null
                         val isNearEnd = currentTargetEp != null && (
                             (currentTargetEp.ending != null && watchProgress.positionMs >= (currentTargetEp.ending.startSec - 10) * 1000L) ||
                             (watchProgress.durationMs > 60_000L && watchProgress.positionMs >= watchProgress.durationMs - 45_000L)
                         )
-                        val nextEp = episodes.find { it.ordinal == watchProgress.episodeOrdinal + 1 }
+                        val nextEp = if (currentTargetIndex >= 0) {
+                            episodes.getOrNull(currentTargetIndex + 1)
+                        } else {
+                            episodes.find { it.ordinal == watchProgress.episodeOrdinal + 1 }
+                        }
                         val (targetEp, targetPositionMs, isNewEpisode) = when {
                             isNearEnd && nextEp != null -> Triple(nextEp, 0L, true)
                             watchProgress.positionMs == 0L -> Triple(currentTargetEp ?: episodes.firstOrNull(), 0L, true)
-                            else -> Triple(currentTargetEp ?: episodes.firstOrNull(), watchProgress.positionMs, false)
+                            currentTargetEp != null -> Triple(currentTargetEp, watchProgress.positionMs, false)
+                            else -> Triple(episodes.firstOrNull(), 0L, true)
                         }
+
+                        // Ensure we use a dubbing group that contains the target episode
+                        val effectiveDub = if (targetEp != null && activeDub?.episodes?.any { it.ordinal == targetEp.ordinal } == true) {
+                            activeDub
+                        } else {
+                            loadedDetails?.dubbings?.firstOrNull { dub -> dub.episodes.any { it.ordinal == targetEp?.ordinal } } ?: activeDub
+                        }
+                        val effectiveEpisodes = effectiveDub?.episodes.orEmpty()
 
                         FrostedGlassBox(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                                 .metroClickable {
-                                    if (targetEp != null && activeDub != null) {
+                                    if (targetEp != null && effectiveDub != null) {
                                         onPlayEpisode(
                                             targetEp,
-                                            activeDub.source,
+                                            effectiveDub.source,
                                             anime,
-                                            activeDub.title,
+                                            effectiveDub.title,
                                             targetPositionMs,
-                                            episodes,
+                                            effectiveEpisodes,
                                         )
                                     }
                                 },
@@ -279,10 +304,11 @@ fun DetailsScreen(
                                         color = scheme.accent,
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
+                                    val displayOrdinal = targetEp?.ordinal ?: watchProgress.episodeOrdinal
                                     val subtitle = if (isNewEpisode) {
-                                        "Серия ${targetEp?.ordinal ?: watchProgress.episodeOrdinal} • Новая серия"
+                                        "Серия $displayOrdinal • Новая серия"
                                     } else {
-                                        "Серия ${watchProgress.episodeOrdinal} • ${formatMinSec(watchProgress.positionMs)} / ${formatMinSec(watchProgress.durationMs)}"
+                                        "Серия $displayOrdinal • ${formatMinSec(targetPositionMs)} / ${formatMinSec(watchProgress.durationMs)}"
                                     }
                                     Text(
                                         text = subtitle,
@@ -291,7 +317,7 @@ fun DetailsScreen(
                                         color = scheme.text,
                                     )
                                     Text(
-                                        text = "Озвучка: ${watchProgress.dubbingTitle}",
+                                        text = "Озвучка: ${effectiveDub?.title ?: watchProgress.dubbingTitle}",
                                         fontFamily = MetroFonts.text,
                                         fontSize = 11.sp,
                                         color = scheme.textDim,

@@ -19,6 +19,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -106,11 +109,32 @@ fun PlayerScreen(
     var seekIndicatorText by remember { mutableStateOf<String?>(null) }
     var seekIndicatorSide by remember { mutableStateOf(0) } // -1 left, +1 right
 
-    val nextEpisode = remember(episode, allEpisodes) {
-        allEpisodes.find { it.ordinal == episode.ordinal + 1 }
+    val currentEpisode by rememberUpdatedState(episode)
+    val currentAnime by rememberUpdatedState(anime)
+    val currentDubbingTitle by rememberUpdatedState(dubbingTitle)
+    val currentSource by rememberUpdatedState(source)
+    val currentAllEpisodes by rememberUpdatedState(allEpisodes)
+
+    val sortedEpisodes = remember(allEpisodes) {
+        allEpisodes.sortedBy { it.ordinal }
     }
-    val prevEpisode = remember(episode, allEpisodes) {
-        allEpisodes.find { it.ordinal == episode.ordinal - 1 }
+    val currentEpIndex = remember(sortedEpisodes, episode) {
+        val idx = sortedEpisodes.indexOfFirst { it.ordinal == episode.ordinal }
+        if (idx >= 0) idx else sortedEpisodes.indexOf(episode)
+    }
+    val nextEpisode = remember(sortedEpisodes, currentEpIndex, episode) {
+        if (currentEpIndex in sortedEpisodes.indices) {
+            sortedEpisodes.getOrNull(currentEpIndex + 1)
+        } else {
+            allEpisodes.find { it.ordinal == episode.ordinal + 1 }
+        }
+    }
+    val prevEpisode = remember(sortedEpisodes, currentEpIndex, episode) {
+        if (currentEpIndex in sortedEpisodes.indices) {
+            sortedEpisodes.getOrNull(currentEpIndex - 1)
+        } else {
+            allEpisodes.find { it.ordinal == episode.ordinal - 1 }
+        }
     }
 
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
@@ -137,22 +161,26 @@ fun PlayerScreen(
     }
 
     fun saveCurrentProgress() {
-        if (currentPositionMs > 3000L && durationMs > 10000L) {
+        val ep = currentEpisode
+        val pos = currentPositionMs
+        val dur = durationMs
+        if (pos > 3000L && dur > 10000L) {
             val ed = activeEnding
             val isNearEndOrEnding = when {
-                ed != null && currentPositionMs >= (ed.startSec - 10) * 1000L -> true
-                durationMs > 60_000L && currentPositionMs >= durationMs - 45_000L -> true
+                ed != null && pos >= (ed.startSec - 10) * 1000L -> true
+                dur > 60_000L && pos >= dur - 45_000L -> true
                 else -> false
             }
 
-            if (isNearEndOrEnding && nextEpisode != null) {
+            val nextEp = nextEpisode ?: currentAllEpisodes.find { it.ordinal == ep.ordinal + 1 }
+            if (isNearEndOrEnding && nextEp != null) {
                 repository.saveProgress(
                     dev.metro.anime.data.model.WatchProgress(
-                        anime = anime,
-                        episodeOrdinal = nextEpisode.ordinal,
-                        episodeName = nextEpisode.name,
-                        dubbingTitle = dubbingTitle.ifBlank { source.label },
-                        source = source,
+                        anime = currentAnime,
+                        episodeOrdinal = nextEp.ordinal,
+                        episodeName = nextEp.name,
+                        dubbingTitle = currentDubbingTitle.ifBlank { currentSource.label },
+                        source = currentSource,
                         positionMs = 0L,
                         durationMs = 0L,
                     )
@@ -160,16 +188,47 @@ fun PlayerScreen(
             } else {
                 repository.saveProgress(
                     dev.metro.anime.data.model.WatchProgress(
-                        anime = anime,
-                        episodeOrdinal = episode.ordinal,
-                        episodeName = episode.name,
-                        dubbingTitle = dubbingTitle.ifBlank { source.label },
-                        source = source,
-                        positionMs = currentPositionMs,
-                        durationMs = durationMs,
+                        anime = currentAnime,
+                        episodeOrdinal = ep.ordinal,
+                        episodeName = ep.name,
+                        dubbingTitle = currentDubbingTitle.ifBlank { currentSource.label },
+                        source = currentSource,
+                        positionMs = pos,
+                        durationMs = dur,
                     )
                 )
             }
+        }
+    }
+
+    fun switchToEpisode(target: AnimeEpisode) {
+        saveCurrentProgress()
+        // Pre-save target episode immediately so rapid app-kill or navigation doesn't revert to old episode
+        repository.saveProgress(
+            dev.metro.anime.data.model.WatchProgress(
+                anime = currentAnime,
+                episodeOrdinal = target.ordinal,
+                episodeName = target.name,
+                dubbingTitle = currentDubbingTitle.ifBlank { currentSource.label },
+                source = currentSource,
+                positionMs = 0L,
+                durationMs = 0L,
+            )
+        )
+        onNextEpisodeClick?.invoke(target)
+    }
+
+    // Lifecycle observer to guarantee saving progress when app goes to background / closes
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, episode) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
+                saveCurrentProgress()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -193,6 +252,8 @@ fun PlayerScreen(
         }
     }
 
+    var seekTargetInitialMs by remember(episode) { mutableLongStateOf(initialPositionMs) }
+
     // Initialize ExoPlayer
     val exoPlayer = remember {
         val codecSelector = androidx.media3.exoplayer.mediacodec.MediaCodecSelector { mimeType, requiresSecure, requiresTunneling ->
@@ -214,8 +275,9 @@ fun PlayerScreen(
                     isPlaybackEnded = (state == Player.STATE_ENDED)
                     if (state == Player.STATE_READY) {
                         durationMs = duration.coerceAtLeast(0L)
-                        if (initialPositionMs > 0 && currentPosition == 0L) {
-                            seekTo(initialPositionMs)
+                        if (seekTargetInitialMs > 0 && currentPosition == 0L) {
+                            seekTo(seekTargetInitialMs)
+                            seekTargetInitialMs = 0L
                         }
                     }
                 }
@@ -259,15 +321,16 @@ fun PlayerScreen(
             val mediaItem = MediaItem.fromUri(Uri.parse(streamUrl))
             exoPlayer.setMediaItem(mediaItem)
             exoPlayer.prepare()
-            if (initialPositionMs > 0) {
-                exoPlayer.seekTo(initialPositionMs)
+            if (seekTargetInitialMs > 0) {
+                exoPlayer.seekTo(seekTargetInitialMs)
+                seekTargetInitialMs = 0L
             }
             exoPlayer.play()
         }
     }
 
     // Position tracking loop
-    LaunchedEffect(exoPlayer) {
+    LaunchedEffect(exoPlayer, episode) {
         var lastSavedSec = 0L
         while (isActive) {
             val cur = exoPlayer.currentPosition.coerceAtLeast(0L)
@@ -276,7 +339,7 @@ fun PlayerScreen(
                 durationMs = exoPlayer.duration
             }
             val curSec = cur / 1000
-            if (curSec > 3 && (curSec - lastSavedSec >= 5)) {
+            if (curSec > 3 && (curSec - lastSavedSec >= 5 || curSec < lastSavedSec)) {
                 lastSavedSec = curSec
                 saveCurrentProgress()
             }
@@ -292,10 +355,15 @@ fun PlayerScreen(
         }
     }
 
-    // Cleanup on exit
-    DisposableEffect(Unit) {
+    // Cleanup on episode switch or player exit
+    DisposableEffect(episode) {
         onDispose {
             saveCurrentProgress()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
             exoPlayer.release()
         }
     }
@@ -626,8 +694,7 @@ fun PlayerScreen(
                     .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
                     .metroClickable {
                         if (isEd && nextEpisode != null) {
-                            saveCurrentProgress()
-                            onNextEpisodeClick?.invoke(nextEpisode)
+                            switchToEpisode(nextEpisode)
                         } else if (skipTargetSec != null) {
                             exoPlayer.seekTo(skipTargetSec * 1000L)
                         }
@@ -780,49 +847,47 @@ fun PlayerScreen(
                         IconButton(
                             enabled = prevEpisode != null,
                             onClick = {
-                                if (prevEpisode != null && onNextEpisodeClick != null) {
-                                saveCurrentProgress()
-                                onNextEpisodeClick(prevEpisode)
+                                if (prevEpisode != null) {
+                                    switchToEpisode(prevEpisode)
+                                }
                             }
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Предыдущая серия",
+                                tint = if (prevEpisode != null) scheme.text else scheme.textDim.copy(alpha = 0.3f),
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Предыдущая серия",
-                            tint = if (prevEpisode != null) scheme.text else scheme.textDim.copy(alpha = 0.3f),
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = scheme.accent,
-                            modifier = Modifier.size(16.dp),
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "${episode.ordinal} Серия",
-                            fontFamily = MetroFonts.headline,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp,
-                            color = scheme.text,
-                        )
-                    }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = scheme.accent,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "${episode.ordinal} Серия",
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = scheme.text,
+                            )
+                        }
 
-                    IconButton(
-                        enabled = nextEpisode != null,
-                        onClick = {
-                            if (nextEpisode != null && onNextEpisodeClick != null) {
-                                saveCurrentProgress()
-                                onNextEpisodeClick(nextEpisode)
+                        IconButton(
+                            enabled = nextEpisode != null,
+                            onClick = {
+                                if (nextEpisode != null) {
+                                    switchToEpisode(nextEpisode)
+                                }
                             }
-                        }
-                    ) {
+                        ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = "Следующая серия",
