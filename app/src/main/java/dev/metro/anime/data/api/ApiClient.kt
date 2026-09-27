@@ -140,7 +140,12 @@ object ApiClient {
                     val type = obj.get("type")?.takeIf { !it.isJsonNull }?.asString
                     val screens = obj.getAsJsonArray("screenshots")
                     val poster = if (screens != null && screens.size() > 0) {
-                        screens[0].asString
+                        var p = screens[0].asString
+                        if (p.startsWith("//")) p = "https:$p"
+                        if (p.contains("/system/animes/original/")) {
+                            p = p.replace("/system/animes/original/", "/system/animes/preview/")
+                        }
+                        p
                     } else ""
 
                     list.add(

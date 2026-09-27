@@ -185,6 +185,11 @@ fun PlayerScreen(
     LaunchedEffect(episode, source) {
         isResolvingStreams = true
         resolveError = null
+        currentPositionMs = 0L
+        durationMs = 0L
+        isPlaybackEnded = false
+        exoPlayer.stop()
+        exoPlayer.clearMediaItems()
         try {
             val resolved = repository.resolveEpisodeStream(episode, source)
             if (resolved.isNotEmpty()) {
@@ -206,7 +211,7 @@ fun PlayerScreen(
     }
 
     // Feed URL to ExoPlayer
-    LaunchedEffect(streams, selectedQuality) {
+    LaunchedEffect(streams, selectedQuality, episode) {
         val streamUrl = streams[selectedQuality] ?: streams.values.firstOrNull()
         if (streamUrl != null) {
             val mediaItem = MediaItem.fromUri(Uri.parse(streamUrl))

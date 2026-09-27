@@ -27,11 +27,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import dev.metro.anime.data.model.AnimeTitle
 import dev.metro.anime.data.model.WatchProgress
 import dev.metro.anime.data.repository.AnimeRepository
@@ -421,7 +423,11 @@ fun HistoryItemCard(
                         .border(1.dp, scheme.strokeStrong, RoundedCornerShape(4.dp)),
                 ) {
                     AsyncImage(
-                        model = item.anime.posterUrl,
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(item.anime.posterUrl)
+                            .crossfade(true)
+                            .size(180, 250)
+                            .build(),
                         contentDescription = item.anime.titleRu,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),

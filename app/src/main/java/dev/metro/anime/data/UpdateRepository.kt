@@ -102,6 +102,10 @@ class UpdateRepository(private val context: Context) {
         }
     }
 
+    init {
+        cleanOldApks()
+    }
+
     suspend fun checkForUpdates() {
         _updateState.value = UpdateState.Checking
         try {
@@ -109,6 +113,7 @@ class UpdateRepository(private val context: Context) {
             if (release != null) {
                 _updateState.value = UpdateState.Available(release)
             } else {
+                cleanOldApks()
                 _updateState.value = UpdateState.UpToDate
             }
         } catch (e: Exception) {
@@ -219,6 +224,63 @@ class UpdateRepository(private val context: Context) {
             return false
         } catch (_: Exception) {
             return remote != current
+        }
+    }
+
+    fun getCacheSizeBytes(): Long {
+        return calculateDirSize(app.cacheDir)
+    }
+
+    private fun calculateDirSize(dir: File): Long {
+        if (!dir.exists()) return 0L
+        var size = 0L
+        val files = dir.listFiles() ?: return 0L
+        for (f in files) {
+            size += if (f.isDirectory) calculateDirSize(f) else f.length()
+        }
+        return size
+    }
+
+    @OptIn(coil.annotation.ExperimentalCoilApi::class)
+    suspend fun clearAllCache(): Long = withContext(Dispatchers.IO) {
+        val initialSize = getCacheSizeBytes()
+        try {
+            // 1. Clear Coil cache
+            try {
+                coil.Coil.imageLoader(app).diskCache?.clear()
+                coil.Coil.imageLoader(app).memoryCache?.clear()
+            } catch (_: Exception) {}
+
+            // 2. Clear updates directory
+            val updatesDir = File(app.cacheDir, "updates")
+            if (updatesDir.exists()) {
+                updatesDir.deleteRecursively()
+            }
+
+            // 3. Clear remaining cacheDir contents
+            val cacheFiles = app.cacheDir.listFiles()
+            cacheFiles?.forEach { file ->
+                file.deleteRecursively()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error clearing cache: ${e.message}")
+        }
+        initialSize
+    }
+
+    fun cleanOldApks(activeVersion: String? = null) {
+        try {
+            val updatesDir = File(app.cacheDir, "updates")
+            if (updatesDir.exists()) {
+                val apks = updatesDir.listFiles { _, name -> name.endsWith(".apk", ignoreCase = true) }
+                apks?.forEach { apk ->
+                    if (activeVersion == null || apk.name != "metro-anime-$activeVersion.apk") {
+                        apk.delete()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to clean old APKs: ${e.message}")
         }
     }
 }

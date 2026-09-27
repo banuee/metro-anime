@@ -116,7 +116,9 @@ class MainActivity : ComponentActivity() {
                 }
 
                 LaunchedEffect(currentScreen) {
-                    if (currentScreen !is Screen.Player) {
+                    if (currentScreen is Screen.Player) {
+                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    } else {
                         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                     }
                 }
@@ -145,6 +147,14 @@ class MainActivity : ComponentActivity() {
 
                     AnimatedContent(
                         targetState = currentScreen,
+                        contentKey = { screen ->
+                            when (screen) {
+                                is Screen.Home -> "home"
+                                is Screen.Settings -> "settings"
+                                is Screen.Details -> "details_${screen.anime.id}"
+                                is Screen.Player -> "player_${screen.anime.id}"
+                            }
+                        },
                         transitionSpec = { fadeIn() togetherWith fadeOut() },
                         label = "screen_transition",
                         modifier = Modifier.fillMaxSize(),

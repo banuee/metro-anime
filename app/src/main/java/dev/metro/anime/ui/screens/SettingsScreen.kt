@@ -117,6 +117,14 @@ fun SettingsScreen(
     var backupError by remember { mutableStateOf(false) }
     var backupWorking by remember { mutableStateOf(false) }
 
+    var cacheSizeBytes by remember { mutableLongStateOf(0L) }
+    var isClearingCache by remember { mutableStateOf(false) }
+    var cacheClearedMsg by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        cacheSizeBytes = updateRepo.getCacheSizeBytes()
+    }
+
     val backupRepo = remember { AnimeBackupRepository(context) }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -1013,6 +1021,92 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f),
                         )
                     }
+                }
+            }
+
+            // =================================================================
+            // Cache and Storage Section
+            // =================================================================
+            item {
+                Text(
+                    text = "КЭШ И ХРАНИЛИЩЕ",
+                    fontFamily = MetroFonts.headline,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.2.sp,
+                    color = scheme.textDim,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(MetroDimens.radius))
+                        .background(scheme.glass)
+                        .border(1.dp, scheme.stroke, RoundedCornerShape(MetroDimens.radius))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    val sizeText = when {
+                        cacheSizeBytes >= 1024 * 1024 -> String.format(Locale.US, "%.1f МБ", cacheSizeBytes / (1024f * 1024f))
+                        cacheSizeBytes >= 1024 -> "${cacheSizeBytes / 1024} КБ"
+                        else -> "$cacheSizeBytes Б"
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column {
+                            Text(
+                                text = "Занято кэшем",
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                color = scheme.text,
+                            )
+                            Text(
+                                text = "Обложки аниме и временные файлы",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 12.sp,
+                                color = scheme.textDim,
+                            )
+                        }
+
+                        Text(
+                            text = sizeText,
+                            fontFamily = MetroFonts.headline,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = scheme.accent,
+                        )
+                    }
+
+                    if (cacheClearedMsg) {
+                        Text(
+                            text = "✓ Кэш успешно очищен",
+                            fontFamily = MetroFonts.text,
+                            fontSize = 12.sp,
+                            color = Color(0xFF339933),
+                        )
+                    }
+
+                    MetroButton(
+                        text = if (isClearingCache) "Очистка..." else "Очистить кэш",
+                        isPrimary = false,
+                        enabled = !isClearingCache && cacheSizeBytes > 0L,
+                        onClick = {
+                            scope.launch {
+                                isClearingCache = true
+                                updateRepo.clearAllCache()
+                                cacheSizeBytes = updateRepo.getCacheSizeBytes()
+                                isClearingCache = false
+                                cacheClearedMsg = true
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
 
