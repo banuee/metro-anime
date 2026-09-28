@@ -83,8 +83,12 @@ fun PlayerScreen(
         }
     }
 
-    var streams by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var selectedQuality by remember { mutableStateOf("720") }
+    var streamsState by remember { mutableStateOf<Pair<Map<String, String>, String>>(Pair(emptyMap(), "720")) }
+    val streams = streamsState.first
+    val selectedQuality = streamsState.second
+    fun updateQuality(newQuality: String) {
+        streamsState = Pair(streamsState.first, newQuality)
+    }
     var isResolvingStreams by remember { mutableStateOf(true) }
     var resolveError by remember { mutableStateOf<String?>(null) }
 
@@ -252,7 +256,7 @@ fun PlayerScreen(
         }
     }
 
-    var seekTargetInitialMs by remember(episode) { mutableLongStateOf(initialPositionMs) }
+    var seekTargetInitialMs by remember(episode.ordinal, initialPositionMs) { mutableLongStateOf(initialPositionMs) }
 
     val playerPrefs = remember { context.getSharedPreferences("metro_player_prefs", android.content.Context.MODE_PRIVATE) }
     var isUpscaleEnabled by remember { mutableStateOf(playerPrefs.getBoolean("upscale_enabled", false)) }
@@ -279,8 +283,10 @@ fun PlayerScreen(
                     isPlaybackEnded = (state == Player.STATE_ENDED)
                     if (state == Player.STATE_READY) {
                         durationMs = duration.coerceAtLeast(0L)
-                        if (seekTargetInitialMs > 0 && currentPosition == 0L) {
-                            seekTo(seekTargetInitialMs)
+                        if (seekTargetInitialMs > 0) {
+                            if (currentPosition < seekTargetInitialMs - 3000L || currentPosition == 0L) {
+                                seekTo(seekTargetInitialMs)
+                            }
                             seekTargetInitialMs = 0L
                         }
                     }
@@ -289,14 +295,23 @@ fun PlayerScreen(
         }
     }
 
+    var effectsApplied by remember { mutableStateOf(false) }
     LaunchedEffect(isUpscaleEnabled) {
         playerPrefs.edit().putBoolean("upscale_enabled", isUpscaleEnabled).apply()
-        if (isUpscaleEnabled) {
-            exoPlayer.setVideoEffects(listOf(dev.metro.anime.ui.player.AnimeUpscaleGlEffect(0.75f)))
-        } else {
-            exoPlayer.setVideoEffects(emptyList())
+        try {
+            if (isUpscaleEnabled) {
+                exoPlayer.setVideoEffects(listOf(dev.metro.anime.ui.player.AnimeUpscaleGlEffect(0.75f)))
+                effectsApplied = true
+            } else if (effectsApplied) {
+                exoPlayer.setVideoEffects(emptyList())
+                effectsApplied = false
+            }
+        } catch (e: Throwable) {
+            android.util.Log.e("PlayerScreen", "Error setting video effects", e)
         }
     }
+
+    var currentLoadedUrl by remember(episode.ordinal) { mutableStateOf<String?>(null) }
 
     // Resolve streams
     LaunchedEffect(episode, source) {
@@ -305,18 +320,19 @@ fun PlayerScreen(
         currentPositionMs = 0L
         durationMs = 0L
         isPlaybackEnded = false
+        currentLoadedUrl = null
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
         try {
             val resolved = repository.resolveEpisodeStream(episode, source)
             if (resolved.isNotEmpty()) {
-                streams = resolved
-                selectedQuality = when {
+                val quality = when {
                     resolved.containsKey("1080") -> "1080"
                     resolved.containsKey("720") -> "720"
                     resolved.containsKey("480") -> "480"
                     else -> resolved.keys.first()
                 }
+                streamsState = Pair(resolved, quality)
             } else {
                 resolveError = "Не удалось получить видеопоток."
             }
@@ -328,16 +344,18 @@ fun PlayerScreen(
     }
 
     // Feed URL to ExoPlayer
-    LaunchedEffect(streams, selectedQuality, episode) {
-        val streamUrl = streams[selectedQuality] ?: streams.values.firstOrNull()
-        if (streamUrl != null) {
-            val mediaItem = MediaItem.fromUri(Uri.parse(streamUrl))
-            exoPlayer.setMediaItem(mediaItem)
-            exoPlayer.prepare()
-            if (seekTargetInitialMs > 0) {
-                exoPlayer.seekTo(seekTargetInitialMs)
-                seekTargetInitialMs = 0L
+    LaunchedEffect(streamsState, episode) {
+        val streamUrl = streamsState.first[streamsState.second] ?: streamsState.first.values.firstOrNull()
+        if (streamUrl != null && streamUrl != currentLoadedUrl) {
+            currentLoadedUrl = streamUrl
+            val targetSeek = if (seekTargetInitialMs > 0) {
+                seekTargetInitialMs
+            } else {
+                exoPlayer.currentPosition.coerceAtLeast(0L)
             }
+            val mediaItem = MediaItem.fromUri(Uri.parse(streamUrl))
+            exoPlayer.setMediaItem(mediaItem, targetSeek)
+            exoPlayer.prepare()
             exoPlayer.play()
         }
     }
@@ -1159,7 +1177,7 @@ fun PlayerScreen(
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(if (selectedQuality == q) scheme.accent else scheme.glass)
                                         .border(1.dp, if (selectedQuality == q) scheme.accent else scheme.stroke, RoundedCornerShape(6.dp))
-                                        .metroClickable { selectedQuality = q }
+                                        .metroClickable { updateQuality(q) }
                                         .padding(horizontal = 10.dp, vertical = 5.dp),
                                 ) {
                                     Text(

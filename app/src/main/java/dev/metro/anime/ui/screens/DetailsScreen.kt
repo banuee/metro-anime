@@ -261,7 +261,7 @@ fun DetailsScreen(
                                         onPlayEpisode(
                                             targetEp,
                                             effectiveDub.source,
-                                            anime,
+                                            anime.sanitized(),
                                             effectiveDub.title,
                                             targetPositionMs,
                                             effectiveEpisodes,
@@ -329,13 +329,13 @@ fun DetailsScreen(
                 }
 
                 // Genres
-                if (anime.genres.isNotEmpty()) {
+                if (anime.safeGenres.isNotEmpty()) {
                     item {
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            items(anime.genres) { genre ->
+                            items(anime.safeGenres) { genre ->
                                 MetroChip(text = genre)
                             }
                         }
@@ -507,7 +507,7 @@ fun DetailsScreen(
                                 onPlayEpisode(
                                     episode,
                                     activeDub?.source ?: AnimeSource.ANILIBRIA,
-                                    anime,
+                                    anime.sanitized(),
                                     activeDub?.title ?: "",
                                     startPos,
                                     episodes,

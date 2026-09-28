@@ -34,8 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import dev.metro.anime.data.model.AnimeTitle
-import dev.metro.anime.data.model.WatchProgress
+import dev.metro.anime.data.model.*
 import dev.metro.anime.data.repository.AnimeRepository
 import dev.metro.anime.ui.components.*
 import dev.metro.anime.ui.theme.FrostedGlassBox
@@ -199,7 +198,7 @@ fun HomeScreen(
                             items(history, key = { it.anime.id }) { item ->
                                 HistoryItemCard(
                                     item = item,
-                                    onClick = { onAnimeClick(item.anime) },
+                                    onClick = { onAnimeClick(item.anime.sanitized()) },
                                     onDelete = { repository.removeHistoryItem(item.anime.id) },
                                 )
                             }
@@ -248,7 +247,7 @@ fun HomeScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(bottom = 12.dp)
-                                        .metroClickable { onAnimeClick(last.anime) },
+                                        .metroClickable { onAnimeClick(last.anime.sanitized()) },
                                     shape = MetroDimens.radiusSmall,
                                     tint = scheme.glassHover,
                                     borderColor = scheme.accent.copy(alpha = 0.45f),

@@ -151,9 +151,9 @@ fun AnimeTileCard(
                     color = scheme.textDim,
                 )
 
-                if (anime.genres.isNotEmpty()) {
+                if (anime.safeGenres.isNotEmpty()) {
                     Text(
-                        text = anime.genres.first(),
+                        text = anime.safeGenres.first(),
                         fontFamily = MetroFonts.text,
                         fontSize = 10.sp,
                         color = scheme.accent,

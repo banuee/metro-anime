@@ -6,20 +6,36 @@ enum class AnimeSource(val label: String) {
 }
 
 data class AnimeTitle(
-    val id: String,
-    val titleRu: String,
+    val id: String = "",
+    val titleRu: String = "",
     val titleOrig: String? = null,
-    val posterUrl: String,
+    val posterUrl: String = "",
     val description: String? = null,
     val year: Int? = null,
     val type: String? = null,
     val season: String? = null,
     val episodesCount: Int? = null,
-    val genres: List<String> = emptyList(),
+    val genres: List<String>? = emptyList(),
     val rating: Double? = null,
     val shikimoriId: Long? = null,
-    val source: AnimeSource = AnimeSource.ANILIBRIA,
-)
+    val source: AnimeSource? = AnimeSource.ANILIBRIA,
+) {
+    val safeGenres: List<String>
+        get() = genres ?: emptyList()
+
+    val safeSource: AnimeSource
+        get() = source ?: AnimeSource.ANILIBRIA
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is AnimeTitle) return false
+        return id == other.id
+    }
+
+    override fun hashCode(): Int {
+        return id.hashCode()
+    }
+}
 
 data class SkipTimestamps(
     val startSec: Int,
@@ -53,10 +69,39 @@ data class WatchProgress(
     val anime: AnimeTitle,
     val episodeOrdinal: Int,
     val episodeName: String? = null,
-    val dubbingTitle: String,
-    val source: AnimeSource,
+    val dubbingTitle: String = "",
+    val source: AnimeSource? = AnimeSource.ANILIBRIA,
     val positionMs: Long,
     val durationMs: Long,
     val updatedAt: Long = System.currentTimeMillis(),
+) {
+    val safeSource: AnimeSource
+        get() = source ?: anime.safeSource
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is WatchProgress) return false
+        return anime.id == other.anime.id && episodeOrdinal == other.episodeOrdinal
+    }
+
+    override fun hashCode(): Int {
+        var result = anime.id.hashCode()
+        result = 31 * result + episodeOrdinal
+        return result
+    }
+}
+
+fun AnimeTitle.sanitized(): AnimeTitle = copy(
+    id = (id as String?).orEmpty(),
+    titleRu = (titleRu as String?).orEmpty(),
+    posterUrl = (posterUrl as String?).orEmpty(),
+    genres = genres ?: emptyList(),
+    source = source ?: AnimeSource.ANILIBRIA,
+)
+
+fun WatchProgress.sanitized(): WatchProgress = copy(
+    anime = anime.sanitized(),
+    dubbingTitle = (dubbingTitle as String?).orEmpty(),
+    source = source ?: anime.safeSource,
 )
 

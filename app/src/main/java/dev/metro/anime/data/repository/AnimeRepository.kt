@@ -156,17 +156,18 @@ class AnimeRepository(context: Context) {
         try {
             val type = object : TypeToken<List<AnimeTitle>>() {}.type
             val list: List<AnimeTitle> = gson.fromJson(json, type) ?: emptyList()
-            _bookmarks.value = list
+            _bookmarks.value = list.map { it.sanitized() }
         } catch (_: Exception) {}
     }
 
     fun toggleBookmark(title: AnimeTitle) {
+        val cleanTitle = title.sanitized()
         val current = _bookmarks.value.toMutableList()
-        val existingIndex = current.indexOfFirst { it.id == title.id }
+        val existingIndex = current.indexOfFirst { it.id == cleanTitle.id }
         if (existingIndex >= 0) {
             current.removeAt(existingIndex)
         } else {
-            current.add(0, title)
+            current.add(0, cleanTitle)
         }
         _bookmarks.value = current
         prefs.edit().putString("bookmarks", gson.toJson(current)).apply()
@@ -181,14 +182,15 @@ class AnimeRepository(context: Context) {
         try {
             val type = object : TypeToken<List<WatchProgress>>() {}.type
             val list: List<WatchProgress> = gson.fromJson(json, type) ?: emptyList()
-            _history.value = list
+            _history.value = list.map { it.sanitized() }
         } catch (_: Exception) {}
     }
 
     fun saveProgress(progress: WatchProgress) {
+        val cleanProgress = progress.sanitized()
         val current = _history.value.toMutableList()
-        current.removeAll { it.anime.id == progress.anime.id }
-        current.add(0, progress)
+        current.removeAll { it.anime.id == cleanProgress.anime.id }
+        current.add(0, cleanProgress)
         // Keep up to 50 items
         val trimmed = if (current.size > 50) current.take(50) else current
         _history.value = trimmed
@@ -211,11 +213,13 @@ class AnimeRepository(context: Context) {
     fun getAllHistory(): List<WatchProgress> = _history.value
 
     fun restoreData(bookmarks: List<AnimeTitle>, history: List<WatchProgress>) {
-        _bookmarks.value = bookmarks
-        _history.value = history
+        val cleanBookmarks = bookmarks.map { it.sanitized() }
+        val cleanHistory = history.map { it.sanitized() }
+        _bookmarks.value = cleanBookmarks
+        _history.value = cleanHistory
         prefs.edit()
-            .putString("bookmarks", gson.toJson(bookmarks))
-            .putString("watch_history", gson.toJson(history))
+            .putString("bookmarks", gson.toJson(cleanBookmarks))
+            .putString("watch_history", gson.toJson(cleanHistory))
             .apply()
     }
 }

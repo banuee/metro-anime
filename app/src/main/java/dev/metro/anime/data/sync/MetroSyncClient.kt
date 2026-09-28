@@ -6,8 +6,7 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
-import dev.metro.anime.data.model.AnimeTitle
-import dev.metro.anime.data.model.WatchProgress
+import dev.metro.anime.data.model.*
 import dev.metro.anime.data.repository.AnimeRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
