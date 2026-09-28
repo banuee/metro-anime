@@ -44,9 +44,9 @@ class MetroSyncClient(
     private val gson: Gson = GsonBuilder().create()
 
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(3, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
-        .writeTimeout(5, TimeUnit.SECONDS)
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .writeTimeout(10, TimeUnit.SECONDS)
         .build()
 
     private val _isPaired = MutableStateFlow(!prefs.getString(KEY_TOKEN, null).isNullOrBlank())
@@ -74,7 +74,7 @@ class MetroSyncClient(
     /**
      * Sends UDP broadcast to locate Desktop Metro Anime in the local Wi-Fi / LAN network.
      */
-    suspend fun discoverServer(timeoutMs: Long = 1800): Pair<String, Int>? = withContext(Dispatchers.IO) {
+    suspend fun discoverServer(timeoutMs: Long = 3000): Pair<String, Int>? = withContext(Dispatchers.IO) {
         var socket: DatagramSocket? = null
         try {
             socket = DatagramSocket()
@@ -83,9 +83,25 @@ class MetroSyncClient(
 
             val msg = "METRO_DISCOVER"
             val buffer = msg.toByteArray()
-            val broadcastAddr = InetAddress.getByName("255.255.255.255")
-            val packet = DatagramPacket(buffer, buffer.size, broadcastAddr, UDP_DISCOVERY_PORT)
-            socket.send(packet)
+
+            // 1. Global broadcast
+            try {
+                val broadcastAddr = InetAddress.getByName("255.255.255.255")
+                socket.send(DatagramPacket(buffer, buffer.size, broadcastAddr, UDP_DISCOVERY_PORT))
+            } catch (_: Exception) {}
+
+            // 2. Subnet broadcasts on active Wi-Fi interfaces
+            try {
+                val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+                while (interfaces.hasMoreElements()) {
+                    val networkInterface = interfaces.nextElement()
+                    if (networkInterface.isLoopback || !networkInterface.isUp) continue
+                    for (interfaceAddress in networkInterface.interfaceAddresses) {
+                        val broadcast = interfaceAddress.broadcast ?: continue
+                        socket.send(DatagramPacket(buffer, buffer.size, broadcast, UDP_DISCOVERY_PORT))
+                    }
+                }
+            } catch (_: Exception) {}
 
             val receiveData = ByteArray(512)
             val receivePacket = DatagramPacket(receiveData, receiveData.size)
