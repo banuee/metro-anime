@@ -254,6 +254,10 @@ fun PlayerScreen(
 
     var seekTargetInitialMs by remember(episode) { mutableLongStateOf(initialPositionMs) }
 
+    val playerPrefs = remember { context.getSharedPreferences("metro_player_prefs", android.content.Context.MODE_PRIVATE) }
+    var isUpscaleEnabled by remember { mutableStateOf(playerPrefs.getBoolean("upscale_enabled", false)) }
+    var upscaleHudVisible by remember { mutableStateOf(false) }
+
     // Initialize ExoPlayer
     val exoPlayer = remember {
         val codecSelector = androidx.media3.exoplayer.mediacodec.MediaCodecSelector { mimeType, requiresSecure, requiresTunneling ->
@@ -282,6 +286,15 @@ fun PlayerScreen(
                     }
                 }
             })
+        }
+    }
+
+    LaunchedEffect(isUpscaleEnabled) {
+        playerPrefs.edit().putBoolean("upscale_enabled", isUpscaleEnabled).apply()
+        if (isUpscaleEnabled) {
+            exoPlayer.setVideoEffects(listOf(dev.metro.anime.ui.player.AnimeUpscaleGlEffect(0.75f)))
+        } else {
+            exoPlayer.setVideoEffects(emptyList())
         }
     }
 
@@ -557,6 +570,52 @@ fun PlayerScreen(
                         contentDescription = null,
                         tint = scheme.accent,
                         modifier = Modifier.size(16.dp),
+                    )
+                }
+            }
+        }
+
+        // =====================================================================
+        // HUD: Upscale Banner (CAS)
+        // =====================================================================
+        LaunchedEffect(upscaleHudVisible) {
+            if (upscaleHudVisible) {
+                delay(1200)
+                upscaleHudVisible = false
+            }
+        }
+        AnimatedVisibility(
+            visible = upscaleHudVisible,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 28.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                    .background(Color(0xFF101016).copy(alpha = 0.75f))
+                    .border(1.dp, if (isUpscaleEnabled) scheme.accent else Color.White.copy(alpha = 0.2f), RoundedCornerShape(MetroDimens.radiusSmall))
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoFixHigh,
+                        contentDescription = null,
+                        tint = if (isUpscaleEnabled) scheme.accent else scheme.textDim,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        text = if (isUpscaleEnabled) "AI-АПСКЕЙЛ: CAS ВЫСОКИЙ (ВКЛ)" else "AI-АПСКЕЙЛ: ВЫКЛЮЧЕН",
+                        fontFamily = MetroFonts.headline,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = if (isUpscaleEnabled) scheme.accent else scheme.textDim,
                     )
                 }
             }
@@ -897,7 +956,7 @@ fun PlayerScreen(
                     }
                 }
 
-                // RIGHT PILL: [Settings] [Lock]
+                // RIGHT PILL: [Upscale] [Settings] [Lock]
                 Row(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
@@ -907,6 +966,18 @@ fun PlayerScreen(
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                        IconButton(onClick = {
+                            isUpscaleEnabled = !isUpscaleEnabled
+                            upscaleHudVisible = true
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.AutoFixHigh,
+                                contentDescription = "AI-Апскейл",
+                                tint = if (isUpscaleEnabled) scheme.accent else scheme.text,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+
                         IconButton(onClick = {
                             showSettingsDialog = !showSettingsDialog
                             showSpeedDialog = false
@@ -1100,6 +1171,51 @@ fun PlayerScreen(
                                     )
                                 }
                             }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // AI Upscale Switch
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isUpscaleEnabled) scheme.accent.copy(alpha = 0.15f) else scheme.glass)
+                                .border(1.dp, if (isUpscaleEnabled) scheme.accent else scheme.stroke, RoundedCornerShape(8.dp))
+                                .metroClickable {
+                                    isUpscaleEnabled = !isUpscaleEnabled
+                                    upscaleHudVisible = true
+                                }
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "AI-Апскейл (CAS)",
+                                    fontFamily = MetroFonts.headline,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp,
+                                    color = if (isUpscaleEnabled) scheme.accent else scheme.text,
+                                )
+                                Text(
+                                    text = "Четкость контуров без лагов",
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 10.sp,
+                                    color = scheme.textDim,
+                                )
+                            }
+                            Switch(
+                                checked = isUpscaleEnabled,
+                                onCheckedChange = {
+                                    isUpscaleEnabled = it
+                                    upscaleHudVisible = true
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = scheme.accent,
+                                    checkedTrackColor = scheme.accent.copy(alpha = 0.35f),
+                                ),
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))

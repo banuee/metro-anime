@@ -7,6 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -51,6 +54,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var repository: AnimeRepository
     private lateinit var settingsRepository: MetroSettingsRepository
     private lateinit var updateRepository: UpdateRepository
+    private lateinit var syncClient: dev.metro.anime.data.sync.MetroSyncClient
     private var openUpdatesRequest = mutableStateOf(false)
 
     override fun onNewIntent(intent: Intent) {
@@ -61,12 +65,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::syncClient.isInitialized) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                syncClient.autoSyncIfPaired()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         repository = AnimeRepository(applicationContext)
         settingsRepository = MetroSettingsRepository(applicationContext)
         updateRepository = UpdateRepository(applicationContext)
+        syncClient = dev.metro.anime.data.sync.MetroSyncClient(applicationContext, repository)
         dev.metro.anime.data.AutoUpdateNotificationHelper.createNotificationChannel(applicationContext)
 
         if (intent?.getBooleanExtra("open_updates", false) == true) {
@@ -178,6 +192,7 @@ class MainActivity : ComponentActivity() {
                                     settingsRepo = settingsRepository,
                                     updateRepo = updateRepository,
                                     animeRepo = repository,
+                                    syncClient = syncClient,
                                     onBackClick = {
                                         currentScreen = Screen.Home
                                     },

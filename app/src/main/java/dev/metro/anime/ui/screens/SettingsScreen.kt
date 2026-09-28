@@ -67,6 +67,7 @@ fun SettingsScreen(
     settingsRepo: MetroSettingsRepository,
     updateRepo: UpdateRepository,
     animeRepo: AnimeRepository,
+    syncClient: dev.metro.anime.data.sync.MetroSyncClient? = null,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -76,6 +77,23 @@ fun SettingsScreen(
     val updateState by updateRepo.updateState.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    val actualSyncClient = syncClient ?: remember { dev.metro.anime.data.sync.MetroSyncClient(context, animeRepo) }
+    val isPaired by actualSyncClient.isPaired.collectAsState()
+    val isSyncing by actualSyncClient.isSyncing.collectAsState()
+    val syncStatus by actualSyncClient.lastStatus.collectAsState()
+    val serverHost by actualSyncClient.serverHost.collectAsState()
+    val autoSyncEnabled by actualSyncClient.autoSyncEnabled.collectAsState()
+
+    var pinInput by remember { mutableStateOf("") }
+    var hostInput by remember { mutableStateOf(serverHost) }
+    var isDiscovering by remember { mutableStateOf(false) }
+
+    LaunchedEffect(serverHost) {
+        if (serverHost.isNotBlank()) {
+            hostInput = serverHost
+        }
+    }
 
     val intervalMinutesList = remember { listOf(0, 10, 30, 60, 180, 360, 720, 1440) }
     val intervalLabels = remember {
@@ -955,6 +973,230 @@ fun SettingsScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            // =================================================================
+            // PC Sync Section (Wi-Fi / LAN)
+            // =================================================================
+            item {
+                Text(
+                    text = "СИНХРОНИЗАЦИЯ С ПК (WI-FI)",
+                    fontFamily = MetroFonts.headline,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.2.sp,
+                    color = scheme.textDim,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(MetroDimens.radius))
+                        .background(scheme.glass)
+                        .border(1.dp, scheme.stroke, RoundedCornerShape(MetroDimens.radius))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isPaired) Color(0xFF4CAF50) else scheme.textDim.copy(alpha = 0.5f))
+                            )
+                            Text(
+                                text = if (isPaired) "Связь с ПК активна" else "Связь с ПК не настроена",
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = if (isPaired) scheme.accent else scheme.text,
+                            )
+                        }
+
+                        if (isSyncing || isDiscovering) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = scheme.accent,
+                                strokeWidth = 2.dp,
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = if (isPaired) {
+                            "История просмотров и закладки автоматически обновляются при входе в приложение в домашней сети Wi-Fi."
+                        } else {
+                            "Подключите телефон к компьютеру в одной сети Wi-Fi: запустите Metro Anime на ПК, откройте настройки и введите отображаемый там 4-значный PIN."
+                        },
+                        color = scheme.textDim,
+                        fontSize = 12.sp,
+                        fontFamily = MetroFonts.text,
+                        lineHeight = 16.sp,
+                    )
+
+                    // Status pill
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                            .background(scheme.accent.copy(alpha = 0.10f))
+                            .border(1.dp, scheme.accent.copy(alpha = 0.35f), RoundedCornerShape(MetroDimens.radiusSmall))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                    ) {
+                        Text(
+                            text = syncStatus,
+                            color = scheme.accent,
+                            fontSize = 12.sp,
+                            fontFamily = MetroFonts.text,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+
+                    if (!isPaired) {
+                        // Discovery button
+                        MetroButton(
+                            text = if (isDiscovering) "Поиск ПК в сети..." else "Найти ПК автоматически",
+                            isPrimary = false,
+                            enabled = !isDiscovering && !isSyncing,
+                            onClick = {
+                                scope.launch {
+                                    isDiscovering = true
+                                    val found = actualSyncClient.discoverServer(2500)
+                                    isDiscovering = false
+                                    if (found != null) {
+                                        hostInput = found.first
+                                        Toast.makeText(context, "ПК найден: ${found.first}", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "ПК не найден. Убедитесь, что приложение на ПК запущено.", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+
+                        // IP and PIN inputs
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            OutlinedTextField(
+                                value = hostInput,
+                                onValueChange = { hostInput = it },
+                                label = { Text("IP адрес ПК", fontSize = 11.sp) },
+                                singleLine = true,
+                                modifier = Modifier.weight(1.3f),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = scheme.accent,
+                                    unfocusedBorderColor = scheme.stroke,
+                                    focusedLabelColor = scheme.accent,
+                                    unfocusedLabelColor = scheme.textDim,
+                                    focusedTextColor = scheme.text,
+                                    unfocusedTextColor = scheme.text,
+                                ),
+                            )
+
+                            OutlinedTextField(
+                                value = pinInput,
+                                onValueChange = { if (it.length <= 6) pinInput = it },
+                                label = { Text("PIN", fontSize = 11.sp) },
+                                singleLine = true,
+                                modifier = Modifier.weight(0.7f),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = scheme.accent,
+                                    unfocusedBorderColor = scheme.stroke,
+                                    focusedLabelColor = scheme.accent,
+                                    unfocusedLabelColor = scheme.textDim,
+                                    focusedTextColor = scheme.text,
+                                    unfocusedTextColor = scheme.text,
+                                ),
+                            )
+                        }
+
+                        MetroButton(
+                            text = "Подключить и синхронизировать",
+                            isPrimary = true,
+                            enabled = hostInput.isNotBlank() && pinInput.isNotBlank() && !isSyncing,
+                            onClick = {
+                                scope.launch {
+                                    actualSyncClient.pairWithPin(hostInput.trim(), 8765, pinInput.trim())
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        // Paired controls: Auto-sync switch
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                                .background(scheme.glassHover)
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Авто-синхронизация",
+                                    fontFamily = MetroFonts.headline,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp,
+                                    color = scheme.text,
+                                )
+                                Text(
+                                    text = "Обновлять при каждом входе в приложение",
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 11.sp,
+                                    color = scheme.textDim,
+                                )
+                            }
+                            Switch(
+                                checked = autoSyncEnabled,
+                                onCheckedChange = { actualSyncClient.setAutoSyncEnabled(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = scheme.accent,
+                                    checkedTrackColor = scheme.accent.copy(alpha = 0.35f),
+                                ),
+                            )
+                        }
+
+                        // Buttons: Sync Now & Unpair
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            MetroButton(
+                                text = if (isSyncing) "Синхронизация..." else "Синхронизировать",
+                                isPrimary = true,
+                                enabled = !isSyncing,
+                                onClick = {
+                                    scope.launch {
+                                        actualSyncClient.sync()
+                                    }
+                                },
+                                modifier = Modifier.weight(1.3f),
+                            )
+
+                            MetroButton(
+                                text = "Отключить",
+                                isPrimary = false,
+                                enabled = !isSyncing,
+                                onClick = {
+                                    actualSyncClient.unpair()
+                                },
+                                modifier = Modifier.weight(0.9f),
+                            )
                         }
                     }
                 }
