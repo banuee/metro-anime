@@ -57,13 +57,16 @@ import dev.metro.anime.data.model.AnimeEpisode
 import dev.metro.anime.data.model.AnimeSource
 import dev.metro.anime.data.model.AnimeTitle
 import dev.metro.anime.data.repository.AnimeRepository
+import androidx.compose.runtime.CompositionLocalProvider
 import dev.metro.anime.ui.components.MetroButton
 import dev.metro.anime.ui.components.MetroChip
 import dev.metro.anime.ui.theme.LocalMetroScheme
 import dev.metro.anime.ui.theme.MetroDimens
 import dev.metro.anime.ui.theme.MetroFonts
 import dev.metro.anime.ui.theme.metroClickable
+import dev.chrisbanes.haze.HazeDefaults
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.LocalHazeStyle
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.delay
@@ -87,6 +90,12 @@ fun PlayerScreen(
     val context = LocalContext.current
     val scheme = LocalMetroScheme.current
     val hazeState = remember { HazeState() }
+    val playerHazeStyle = remember {
+        HazeDefaults.style(
+            backgroundColor = Color(0xFF101016),
+            blurRadius = 20.dp,
+        )
+    }
 
     var playPausePulseVisible by remember { mutableStateOf(false) }
     var playPausePulseIsPlay by remember { mutableStateOf(false) }
@@ -723,11 +732,12 @@ fun PlayerScreen(
     }
 
     // Main Box
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black),
-    ) {
+    CompositionLocalProvider(LocalHazeStyle provides playerHazeStyle) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color.Black),
+        ) {
         // Video View
         AndroidView(
             factory = { ctx ->
@@ -866,6 +876,7 @@ fun PlayerScreen(
                     .size(76.dp)
                     .clip(RoundedCornerShape(38.dp))
                     .hazeEffect(state = hazeState) {
+                        backgroundColor = Color(0xFF101016)
                         blurRadius = 20.dp
                     }
                     .background(Color(0xFF101016).copy(alpha = 0.55f))
@@ -897,6 +908,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radiusSmall))
                     .hazeEffect(state = hazeState) {
+                        backgroundColor = Color(0xFF101016)
                         blurRadius = 20.dp
                     }
                     .background(Color(0xFF101016).copy(alpha = 0.60f))
@@ -947,6 +959,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radiusSmall))
                     .hazeEffect(state = hazeState) {
+                        backgroundColor = Color(0xFF101016)
                         blurRadius = 20.dp
                     }
                     .background(Color(0xFF101016).copy(alpha = 0.65f))
@@ -996,6 +1009,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radius))
                     .hazeEffect(state = hazeState) {
+                        backgroundColor = Color(0xFF101016)
                         blurRadius = 20.dp
                     }
                     .background(Color(0xFF101016).copy(alpha = 0.60f))
@@ -1108,6 +1122,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radiusSmall))
                     .hazeEffect(state = hazeState) {
+                        backgroundColor = Color(0xFF101016)
                         blurRadius = 20.dp
                     }
                     .background(Color(0xFF101016).copy(alpha = 0.60f))
@@ -1151,6 +1166,7 @@ fun PlayerScreen(
                     .size(44.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .hazeEffect(state = hazeState) {
+                        backgroundColor = Color(0xFF101016)
                         blurRadius = 20.dp
                     }
                     .background(Color(0xFF101016).copy(alpha = 0.60f))
@@ -1205,6 +1221,7 @@ fun PlayerScreen(
                             .align(Alignment.CenterStart)
                             .clip(RoundedCornerShape(12.dp))
                             .hazeEffect(state = hazeState) {
+                                backgroundColor = Color(0xFF101016)
                                 blurRadius = 24.dp
                             }
                             .background(Color(0xFF101016).copy(alpha = 0.55f))
@@ -1267,6 +1284,7 @@ fun PlayerScreen(
                             .align(Alignment.Center)
                             .clip(RoundedCornerShape(12.dp))
                             .hazeEffect(state = hazeState) {
+                                backgroundColor = Color(0xFF101016)
                                 blurRadius = 24.dp
                             }
                             .background(Color(0xFF101016).copy(alpha = 0.55f))
@@ -1333,6 +1351,7 @@ fun PlayerScreen(
                         .align(Alignment.CenterEnd)
                         .clip(RoundedCornerShape(12.dp))
                         .hazeEffect(state = hazeState) {
+                            backgroundColor = Color(0xFF101016)
                             blurRadius = 24.dp
                         }
                         .background(Color(0xFF101016).copy(alpha = 0.55f))
@@ -1395,6 +1414,7 @@ fun PlayerScreen(
                             .width(260.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .hazeEffect(state = hazeState) {
+                                backgroundColor = Color(0xFF101016)
                                 blurRadius = 24.dp
                             }
                             .background(Color(0xFF101016).copy(alpha = 0.75f))
@@ -1493,6 +1513,7 @@ fun PlayerScreen(
                             .width(260.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .hazeEffect(state = hazeState) {
+                                backgroundColor = Color(0xFF101016)
                                 blurRadius = 24.dp
                             }
                             .background(Color(0xFF101016).copy(alpha = 0.75f))
@@ -1631,6 +1652,7 @@ fun PlayerScreen(
                         .padding(horizontal = 20.dp, vertical = 14.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .hazeEffect(state = hazeState) {
+                            backgroundColor = Color(0xFF101016)
                             blurRadius = 24.dp
                         }
                         .background(Color(0xFF101016).copy(alpha = 0.58f))
@@ -1717,6 +1739,7 @@ fun PlayerScreen(
                 }
             }
         }
+    }
     }
 }
 
