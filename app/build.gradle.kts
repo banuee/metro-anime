@@ -17,8 +17,8 @@ android {
         applicationId = "dev.metro.anime"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.2.2"
+        versionCode = 14
+        versionName = "0.2.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -99,4 +99,5 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3Version")
     implementation("androidx.media3:media3-common:$media3Version")
     implementation("androidx.media3:media3-effect:$media3Version")
+    implementation("androidx.media3:media3-session:$media3Version")
 }

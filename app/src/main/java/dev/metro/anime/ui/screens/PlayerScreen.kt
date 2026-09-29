@@ -32,14 +32,25 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import android.view.KeyEvent
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT
+import androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
+import androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS
+import androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import dev.metro.anime.data.model.AnimeEpisode
@@ -206,6 +217,7 @@ fun PlayerScreen(
     }
 
     fun switchToEpisode(target: AnimeEpisode) {
+        android.util.Log.d("PlayerScreen", "[switchToEpisode] Switching to episode ${target.ordinal}, name=${target.name}")
         saveCurrentProgress()
         // Pre-save target episode immediately so rapid app-kill or navigation doesn't revert to old episode
         repository.saveProgress(
@@ -271,7 +283,16 @@ fun PlayerScreen(
         val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context)
             .setMediaCodecSelector(codecSelector)
             .setEnableDecoderFallback(true)
-        ExoPlayer.Builder(context, renderersFactory).build().apply {
+
+        val audioAttributes = AudioAttributes.Builder()
+            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+            .setUsage(C.USAGE_MEDIA)
+            .build()
+
+        ExoPlayer.Builder(context, renderersFactory)
+            .setAudioAttributes(audioAttributes, true)
+            .setHandleAudioBecomingNoisy(true)
+            .build().apply {
             playWhenReady = true
             addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(playing: Boolean) {
@@ -292,6 +313,209 @@ fun PlayerScreen(
                     }
                 }
             })
+        }
+    }
+
+    val currentNextEp by rememberUpdatedState(nextEpisode)
+    val currentPrevEp by rememberUpdatedState(prevEpisode)
+
+    val forwardingPlayer = remember(exoPlayer) {
+        object : ForwardingPlayer(exoPlayer) {
+            override fun isCommandAvailable(command: Int): Boolean {
+                return when (command) {
+                    COMMAND_SEEK_TO_NEXT, COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> currentNextEp != null
+                    COMMAND_SEEK_TO_PREVIOUS, COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> currentPrevEp != null || currentPosition > 3000L
+                    else -> super.isCommandAvailable(command)
+                }
+            }
+
+            override fun getAvailableCommands(): Player.Commands {
+                val builder = super.getAvailableCommands().buildUpon()
+                if (currentNextEp != null) {
+                    builder.add(COMMAND_SEEK_TO_NEXT)
+                    builder.add(COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                }
+                if (currentPrevEp != null || currentPosition > 3000L) {
+                    builder.add(COMMAND_SEEK_TO_PREVIOUS)
+                    builder.add(COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                }
+                return builder.build()
+            }
+
+            override fun seekToNext() {
+                android.util.Log.d("PlayerScreen", "[ForwardingPlayer] seekToNext() called, currentNextEp=$currentNextEp")
+                val next = currentNextEp
+                if (next != null) {
+                    switchToEpisode(next)
+                }
+            }
+
+            override fun seekToNextMediaItem() {
+                seekToNext()
+            }
+
+            override fun seekToPrevious() {
+                android.util.Log.d("PlayerScreen", "[ForwardingPlayer] seekToPrevious() called, pos=${currentPosition}, currentPrevEp=$currentPrevEp")
+                if (currentPosition > 5000L) {
+                    seekTo(0L)
+                } else {
+                    val prev = currentPrevEp
+                    if (prev != null) {
+                        switchToEpisode(prev)
+                    } else {
+                        seekTo(0L)
+                    }
+                }
+            }
+
+            override fun seekToPreviousMediaItem() {
+                seekToPrevious()
+            }
+        }
+    }
+
+    val coroutineScope = rememberCoroutineScope()
+    val debouncer = remember(coroutineScope) {
+        dev.metro.anime.ui.player.HeadsetHookDebouncer(
+            scope = coroutineScope,
+            onSingleClick = {
+                if (exoPlayer.isPlaying) {
+                    exoPlayer.pause()
+                    playPausePulseIsPlay = false
+                    playPausePulseVisible = true
+                } else {
+                    exoPlayer.play()
+                    playPausePulseIsPlay = true
+                    playPausePulseVisible = true
+                }
+            },
+            onDoubleClick = {
+                forwardingPlayer.seekToNext()
+            },
+            onTripleClick = {
+                forwardingPlayer.seekToPrevious()
+            }
+        )
+    }
+
+    DisposableEffect(exoPlayer, forwardingPlayer, debouncer) {
+        dev.metro.anime.ui.player.MediaButtonManager.onMediaKey = { keyEvent ->
+            android.util.Log.d("PlayerScreen", "[MediaButtonManager] onMediaKey: keyCode=${keyEvent.keyCode}, action=${keyEvent.action}")
+            if (keyEvent.action == KeyEvent.ACTION_DOWN) {
+                when (keyEvent.keyCode) {
+                    KeyEvent.KEYCODE_HEADSETHOOK -> {
+                        debouncer.onHeadsetHook()
+                        true
+                    }
+                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                        if (exoPlayer.isPlaying) {
+                            exoPlayer.pause()
+                            playPausePulseIsPlay = false
+                            playPausePulseVisible = true
+                        } else {
+                            exoPlayer.play()
+                            playPausePulseIsPlay = true
+                            playPausePulseVisible = true
+                        }
+                        true
+                    }
+                    KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                        exoPlayer.play()
+                        playPausePulseIsPlay = true
+                        playPausePulseVisible = true
+                        true
+                    }
+                    KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                        exoPlayer.pause()
+                        playPausePulseIsPlay = false
+                        playPausePulseVisible = true
+                        true
+                    }
+                    KeyEvent.KEYCODE_MEDIA_NEXT,
+                    KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                        forwardingPlayer.seekToNext()
+                        true
+                    }
+                    KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+                    KeyEvent.KEYCODE_MEDIA_REWIND -> {
+                        forwardingPlayer.seekToPrevious()
+                        true
+                    }
+                    KeyEvent.KEYCODE_MEDIA_STOP -> {
+                        exoPlayer.stop()
+                        true
+                    }
+                    else -> false
+                }
+            } else {
+                false
+            }
+        }
+        onDispose {
+            dev.metro.anime.ui.player.MediaButtonManager.onMediaKey = null
+            debouncer.cancel()
+        }
+    }
+
+    val mediaSession = remember(forwardingPlayer) {
+        MediaSession.Builder(context, forwardingPlayer)
+            .setId("metro_anime_player_session")
+            .setCallback(object : MediaSession.Callback {
+                override fun onMediaButtonEvent(
+                    session: MediaSession,
+                    controllerInfo: MediaSession.ControllerInfo,
+                    intent: Intent
+                ): Boolean {
+                    val keyEvent = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT) as? KeyEvent
+                    }
+                    android.util.Log.d("PlayerScreen", "[MediaSession] onMediaButtonEvent: keyEvent=$keyEvent")
+                    if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
+                        when (keyEvent.keyCode) {
+                            KeyEvent.KEYCODE_HEADSETHOOK -> {
+                                debouncer.onHeadsetHook()
+                                return true
+                            }
+                            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                                if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                return true
+                            }
+                            KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                                exoPlayer.play()
+                                return true
+                            }
+                            KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                                exoPlayer.pause()
+                                return true
+                            }
+                            KeyEvent.KEYCODE_MEDIA_NEXT,
+                            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                                forwardingPlayer.seekToNext()
+                                return true
+                            }
+                            KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+                            KeyEvent.KEYCODE_MEDIA_REWIND -> {
+                                forwardingPlayer.seekToPrevious()
+                                return true
+                            }
+                            KeyEvent.KEYCODE_MEDIA_STOP -> {
+                                exoPlayer.stop()
+                                return true
+                            }
+                        }
+                    }
+                    return super.onMediaButtonEvent(session, controllerInfo, intent)
+                }
+            })
+            .build()
+    }
+
+    DisposableEffect(mediaSession) {
+        onDispose {
+            mediaSession.release()
         }
     }
 
@@ -353,7 +577,17 @@ fun PlayerScreen(
             } else {
                 exoPlayer.currentPosition.coerceAtLeast(0L)
             }
-            val mediaItem = MediaItem.fromUri(Uri.parse(streamUrl))
+            val metaBuilder = MediaMetadata.Builder()
+                .setTitle(currentAnime.titleRu.ifBlank { currentAnime.titleOrig ?: "" })
+                .setSubtitle("Серия ${currentEpisode.ordinal}${if (!currentEpisode.name.isNullOrBlank()) " — " + currentEpisode.name else ""}")
+                .setArtist(currentDubbingTitle.ifBlank { currentSource.label })
+            if (currentAnime.posterUrl.isNotBlank()) {
+                metaBuilder.setArtworkUri(Uri.parse(currentAnime.posterUrl))
+            }
+            val mediaItem = MediaItem.Builder()
+                .setUri(Uri.parse(streamUrl))
+                .setMediaMetadata(metaBuilder.build())
+                .build()
             exoPlayer.setMediaItem(mediaItem, targetSeek)
             exoPlayer.prepare()
             exoPlayer.play()
