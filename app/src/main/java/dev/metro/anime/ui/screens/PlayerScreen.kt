@@ -280,9 +280,55 @@ fun PlayerScreen(
             val list = androidx.media3.exoplayer.mediacodec.MediaCodecUtil.getDecoderInfos(mimeType, requiresSecure, requiresTunneling)
             list.sortedBy { if (it.name.contains("goldfish", ignoreCase = true)) 1 else 0 }
         }
-        val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context)
-            .setMediaCodecSelector(codecSelector)
-            .setEnableDecoderFallback(true)
+        val renderersFactory = object : androidx.media3.exoplayer.DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): androidx.media3.exoplayer.audio.AudioSink {
+                val defaultSink = androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioOffloadSupportProvider { _, _ -> androidx.media3.exoplayer.audio.AudioOffloadSupport.DEFAULT_UNSUPPORTED }
+                    .build()
+
+                return object : androidx.media3.exoplayer.audio.ForwardingAudioSink(defaultSink) {
+                    private var currentVol = 1.0f
+                    private var needsVolumeNudge = false
+
+                    override fun setVolume(volume: Float) {
+                        currentVol = volume
+                        super.setVolume(volume)
+                    }
+
+                    override fun play() {
+                        super.play()
+                        needsVolumeNudge = true
+                        nudgeVolume()
+                    }
+
+                    override fun handleBuffer(
+                        buffer: java.nio.ByteBuffer,
+                        presentationTimeUs: Long,
+                        encodedAccessUnitCount: Int
+                    ): Boolean {
+                        if (needsVolumeNudge) {
+                            nudgeVolume()
+                            needsVolumeNudge = false
+                        }
+                        return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
+                    }
+
+                    private fun nudgeVolume() {
+                        if (currentVol > 0f) {
+                            super.setVolume(0f)
+                            super.setVolume(currentVol)
+                        }
+                    }
+                }
+            }
+        }.setMediaCodecSelector(codecSelector)
+         .setEnableDecoderFallback(true)
 
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
@@ -292,11 +338,16 @@ fun PlayerScreen(
         ExoPlayer.Builder(context, renderersFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build().apply {
             playWhenReady = true
             addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(playing: Boolean) {
                     isPlaying = playing
+                    if (playing && !isMuted) {
+                        volume = 0f
+                        volume = 1.0f
+                    }
                 }
 
                 override fun onPlaybackStateChanged(state: Int) {
@@ -310,9 +361,34 @@ fun PlayerScreen(
                             }
                             seekTargetInitialMs = 0L
                         }
+                        if (playWhenReady && !isMuted) {
+                            volume = 0f
+                            volume = 1.0f
+                        }
                     }
                 }
             })
+        }
+    }
+
+    fun ensureAudioAwake() {
+        if (!isMuted) {
+            exoPlayer.volume = 0f
+            exoPlayer.volume = 1.0f
+        }
+    }
+
+    LaunchedEffect(isPlaying) {
+        if (isPlaying && !isMuted) {
+            ensureAudioAwake()
+            delay(150)
+            if (isPlaying && !isMuted) {
+                ensureAudioAwake()
+            }
+            delay(350)
+            if (isPlaying && !isMuted) {
+                ensureAudioAwake()
+            }
         }
     }
 
@@ -385,6 +461,7 @@ fun PlayerScreen(
                     playPausePulseVisible = true
                 } else {
                     exoPlayer.play()
+                    ensureAudioAwake()
                     playPausePulseIsPlay = true
                     playPausePulseVisible = true
                 }
@@ -414,6 +491,7 @@ fun PlayerScreen(
                             playPausePulseVisible = true
                         } else {
                             exoPlayer.play()
+                            ensureAudioAwake()
                             playPausePulseIsPlay = true
                             playPausePulseVisible = true
                         }
@@ -421,6 +499,7 @@ fun PlayerScreen(
                     }
                     KeyEvent.KEYCODE_MEDIA_PLAY -> {
                         exoPlayer.play()
+                        ensureAudioAwake()
                         playPausePulseIsPlay = true
                         playPausePulseVisible = true
                         true
@@ -480,11 +559,17 @@ fun PlayerScreen(
                                 return true
                             }
                             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                                if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                if (exoPlayer.isPlaying) {
+                                    exoPlayer.pause()
+                                } else {
+                                    exoPlayer.play()
+                                    ensureAudioAwake()
+                                }
                                 return true
                             }
                             KeyEvent.KEYCODE_MEDIA_PLAY -> {
                                 exoPlayer.play()
+                                ensureAudioAwake()
                                 return true
                             }
                             KeyEvent.KEYCODE_MEDIA_PAUSE -> {
@@ -715,6 +800,7 @@ fun PlayerScreen(
                                         playPausePulseIsPlay = false
                                     } else {
                                         exoPlayer.play()
+                                        ensureAudioAwake()
                                         isPlaying = true
                                         playPausePulseIsPlay = true
                                     }
@@ -1511,7 +1597,12 @@ fun PlayerScreen(
                         // Play / Pause Button
                         IconButton(
                             onClick = {
-                                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                if (isPlaying) {
+                                    exoPlayer.pause()
+                                } else {
+                                    exoPlayer.play()
+                                    ensureAudioAwake()
+                                }
                             }
                         ) {
                             Icon(
