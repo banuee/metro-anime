@@ -39,7 +39,7 @@ fi
 
 # 2. Сборка релизного APK
 echo "⚙️ Сборка release APK..."
-./gradlew :app:assembleRelease -x test
+bash ./gradlew :app:assembleRelease -x test
 
 APK_PATH="app/build/outputs/apk/release/app-release.apk"
 if [ ! -f "$APK_PATH" ]; then

@@ -4,7 +4,7 @@ set -e
 APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
 
 echo "⚙️ Сборка debug APK..."
-./gradlew assembleDebug
+bash ./gradlew assembleDebug
 
 if [ ! -f "$APK_PATH" ]; then
     echo "❌ APK не найден: $APK_PATH"

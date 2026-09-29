@@ -63,6 +63,9 @@ import dev.metro.anime.ui.theme.LocalMetroScheme
 import dev.metro.anime.ui.theme.MetroDimens
 import dev.metro.anime.ui.theme.MetroFonts
 import dev.metro.anime.ui.theme.metroClickable
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeoutOrNull
@@ -83,6 +86,7 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val scheme = LocalMetroScheme.current
+    val hazeState = remember { HazeState() }
 
     var playPausePulseVisible by remember { mutableStateOf(false) }
     var playPausePulseIsPlay by remember { mutableStateOf(false) }
@@ -742,7 +746,9 @@ fun PlayerScreen(
             update = { view ->
                 view.resizeMode = resizeMode
             },
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(hazeState),
         )
 
         // =====================================================================
@@ -859,7 +865,10 @@ fun PlayerScreen(
                 modifier = Modifier
                     .size(76.dp)
                     .clip(RoundedCornerShape(38.dp))
-                    .background(Color(0xFF101016).copy(alpha = 0.65f))
+                    .hazeEffect(state = hazeState) {
+                        blurRadius = 20.dp
+                    }
+                    .background(Color(0xFF101016).copy(alpha = 0.55f))
                     .border(1.5.dp, scheme.accent.copy(alpha = 0.8f), RoundedCornerShape(38.dp)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -887,11 +896,15 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                    .background(Color(0xFF101016).copy(alpha = 0.70f))
+                    .hazeEffect(state = hazeState) {
+                        blurRadius = 20.dp
+                    }
+                    .background(Color(0xFF101016).copy(alpha = 0.60f))
                     .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
-            ) {
+            )
+ {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -933,7 +946,10 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                    .background(Color(0xFF101016).copy(alpha = 0.75f))
+                    .hazeEffect(state = hazeState) {
+                        blurRadius = 20.dp
+                    }
+                    .background(Color(0xFF101016).copy(alpha = 0.65f))
                     .border(1.dp, if (isUpscaleEnabled) scheme.accent else Color.White.copy(alpha = 0.2f), RoundedCornerShape(MetroDimens.radiusSmall))
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
@@ -979,11 +995,15 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radius))
-                    .background(Color(0xFF101016).copy(alpha = 0.70f))
+                    .hazeEffect(state = hazeState) {
+                        blurRadius = 20.dp
+                    }
+                    .background(Color(0xFF101016).copy(alpha = 0.60f))
                     .border(1.dp, scheme.accent.copy(alpha = 0.6f), RoundedCornerShape(MetroDimens.radius))
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center,
-            ) {
+            )
+ {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1087,7 +1107,10 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                    .background(Color(0xFF101016).copy(alpha = 0.65f))
+                    .hazeEffect(state = hazeState) {
+                        blurRadius = 20.dp
+                    }
+                    .background(Color(0xFF101016).copy(alpha = 0.60f))
                     .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
                     .metroClickable {
                         if (isEd && nextEpisode != null) {
@@ -1127,11 +1150,15 @@ fun PlayerScreen(
                     .padding(top = 18.dp, end = 20.dp)
                     .size(44.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF101016).copy(alpha = 0.65f))
+                    .hazeEffect(state = hazeState) {
+                        blurRadius = 20.dp
+                    }
+                    .background(Color(0xFF101016).copy(alpha = 0.60f))
                     .border(1.dp, scheme.accent, RoundedCornerShape(10.dp))
                     .metroClickable { isControlsLocked = false },
                 contentAlignment = Alignment.Center,
-            ) {
+            )
+ {
                 Icon(
                     imageVector = Icons.Default.Lock,
                     contentDescription = "Разблокировать",
@@ -1177,7 +1204,10 @@ fun PlayerScreen(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF101016).copy(alpha = 0.65f))
+                            .hazeEffect(state = hazeState) {
+                                blurRadius = 24.dp
+                            }
+                            .background(Color(0xFF101016).copy(alpha = 0.55f))
                             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1236,7 +1266,10 @@ fun PlayerScreen(
                         modifier = Modifier
                             .align(Alignment.Center)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF101016).copy(alpha = 0.65f))
+                            .hazeEffect(state = hazeState) {
+                                blurRadius = 24.dp
+                            }
+                            .background(Color(0xFF101016).copy(alpha = 0.55f))
                             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1299,11 +1332,15 @@ fun PlayerScreen(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF101016).copy(alpha = 0.65f))
+                        .hazeEffect(state = hazeState) {
+                            blurRadius = 24.dp
+                        }
+                        .background(Color(0xFF101016).copy(alpha = 0.55f))
                         .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                ) {
+                )
+ {
                         IconButton(onClick = {
                             isUpscaleEnabled = !isUpscaleEnabled
                             upscaleHudVisible = true
@@ -1357,7 +1394,10 @@ fun PlayerScreen(
                         modifier = Modifier
                             .width(260.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF101016).copy(alpha = 0.88f))
+                            .hazeEffect(state = hazeState) {
+                                blurRadius = 24.dp
+                            }
+                            .background(Color(0xFF101016).copy(alpha = 0.75f))
                             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(14.dp),
                     ) {
@@ -1452,10 +1492,14 @@ fun PlayerScreen(
                         modifier = Modifier
                             .width(260.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF101016).copy(alpha = 0.88f))
+                            .hazeEffect(state = hazeState) {
+                                blurRadius = 24.dp
+                            }
+                            .background(Color(0xFF101016).copy(alpha = 0.75f))
                             .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
                             .padding(14.dp),
-                    ) {
+                    )
+ {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1586,7 +1630,10 @@ fun PlayerScreen(
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 20.dp, vertical = 14.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(Color(0xFF101016).copy(alpha = 0.68f))
+                        .hazeEffect(state = hazeState) {
+                            blurRadius = 24.dp
+                        }
+                        .background(Color(0xFF101016).copy(alpha = 0.58f))
                         .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(14.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
