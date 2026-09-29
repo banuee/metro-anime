@@ -57,7 +57,9 @@ import dev.metro.anime.data.model.AnimeEpisode
 import dev.metro.anime.data.model.AnimeSource
 import dev.metro.anime.data.model.AnimeTitle
 import dev.metro.anime.data.repository.AnimeRepository
+import dev.metro.anime.data.settings.MetroSettingsRepository
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import dev.metro.anime.ui.components.MetroButton
 import dev.metro.anime.ui.components.MetroChip
 import dev.metro.anime.ui.theme.LocalMetroScheme
@@ -89,6 +91,13 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val scheme = LocalMetroScheme.current
+    val settingsRepo = remember { MetroSettingsRepository(context) }
+    val currentSettings by settingsRepo.settings.collectAsState()
+    val playerOpacity = currentSettings.playerControlsOpacity
+    val hudPillGlass = Color(0xFF101016).copy(alpha = playerOpacity)
+    val hudCardGlass = Color(0xFF101016).copy(alpha = (playerOpacity * 1.35f).coerceIn(0.25f, 0.90f))
+    val hudBorder = Color.White.copy(alpha = (playerOpacity * 0.4f).coerceIn(0.08f, 0.22f))
+
     val hazeState = remember { HazeState() }
     val playerHazeStyle = remember {
         HazeDefaults.style(
@@ -879,7 +888,7 @@ fun PlayerScreen(
                         backgroundColor = Color(0xFF101016)
                         blurRadius = 20.dp
                     }
-                    .background(Color(0xFF101016).copy(alpha = 0.55f))
+                    .background(hudPillGlass)
                     .border(1.5.dp, scheme.accent.copy(alpha = 0.8f), RoundedCornerShape(38.dp)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -911,7 +920,7 @@ fun PlayerScreen(
                         backgroundColor = Color(0xFF101016)
                         blurRadius = 20.dp
                     }
-                    .background(Color(0xFF101016).copy(alpha = 0.60f))
+                    .background(hudPillGlass)
                     .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
@@ -962,7 +971,7 @@ fun PlayerScreen(
                         backgroundColor = Color(0xFF101016)
                         blurRadius = 20.dp
                     }
-                    .background(Color(0xFF101016).copy(alpha = 0.65f))
+                    .background(hudPillGlass)
                     .border(1.dp, if (isUpscaleEnabled) scheme.accent else Color.White.copy(alpha = 0.2f), RoundedCornerShape(MetroDimens.radiusSmall))
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
@@ -1012,7 +1021,7 @@ fun PlayerScreen(
                         backgroundColor = Color(0xFF101016)
                         blurRadius = 20.dp
                     }
-                    .background(Color(0xFF101016).copy(alpha = 0.60f))
+                    .background(hudPillGlass)
                     .border(1.dp, scheme.accent.copy(alpha = 0.6f), RoundedCornerShape(MetroDimens.radius))
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center,
@@ -1125,7 +1134,7 @@ fun PlayerScreen(
                         backgroundColor = Color(0xFF101016)
                         blurRadius = 20.dp
                     }
-                    .background(Color(0xFF101016).copy(alpha = 0.60f))
+                    .background(hudPillGlass)
                     .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
                     .metroClickable {
                         if (isEd && nextEpisode != null) {
@@ -1169,7 +1178,7 @@ fun PlayerScreen(
                         backgroundColor = Color(0xFF101016)
                         blurRadius = 20.dp
                     }
-                    .background(Color(0xFF101016).copy(alpha = 0.60f))
+                    .background(hudPillGlass)
                     .border(1.dp, scheme.accent, RoundedCornerShape(10.dp))
                     .metroClickable { isControlsLocked = false },
                 contentAlignment = Alignment.Center,
@@ -1224,8 +1233,8 @@ fun PlayerScreen(
                                 backgroundColor = Color(0xFF101016)
                                 blurRadius = 24.dp
                             }
-                            .background(Color(0xFF101016).copy(alpha = 0.55f))
-                            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
+                            .background(hudPillGlass)
+                            .border(1.dp, hudBorder, RoundedCornerShape(12.dp))
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -1287,8 +1296,8 @@ fun PlayerScreen(
                                 backgroundColor = Color(0xFF101016)
                                 blurRadius = 24.dp
                             }
-                            .background(Color(0xFF101016).copy(alpha = 0.55f))
-                            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
+                            .background(hudPillGlass)
+                            .border(1.dp, hudBorder, RoundedCornerShape(12.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -1354,8 +1363,8 @@ fun PlayerScreen(
                             backgroundColor = Color(0xFF101016)
                             blurRadius = 24.dp
                         }
-                        .background(Color(0xFF101016).copy(alpha = 0.55f))
-                        .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
+                        .background(hudPillGlass)
+                        .border(1.dp, hudBorder, RoundedCornerShape(12.dp))
                         .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 )
@@ -1417,8 +1426,8 @@ fun PlayerScreen(
                                 backgroundColor = Color(0xFF101016)
                                 blurRadius = 24.dp
                             }
-                            .background(Color(0xFF101016).copy(alpha = 0.75f))
-                            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
+                            .background(hudCardGlass)
+                            .border(1.dp, hudBorder, RoundedCornerShape(12.dp))
                             .padding(14.dp),
                     ) {
                         Row(
@@ -1516,8 +1525,8 @@ fun PlayerScreen(
                                 backgroundColor = Color(0xFF101016)
                                 blurRadius = 24.dp
                             }
-                            .background(Color(0xFF101016).copy(alpha = 0.75f))
-                            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
+                            .background(hudCardGlass)
+                            .border(1.dp, hudBorder, RoundedCornerShape(12.dp))
                             .padding(14.dp),
                     )
  {
@@ -1623,6 +1632,44 @@ fun PlayerScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
+                        // Player UI Transparency Slider
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Прозрачность UI:",
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                color = scheme.text,
+                            )
+                            val transparencyPct = ((1f - playerOpacity) * 100).toInt()
+                            Text(
+                                text = "$transparencyPct%",
+                                fontFamily = MetroFonts.text,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = scheme.accent,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Slider(
+                            value = 1f - playerOpacity,
+                            onValueChange = {
+                                settingsRepo.setPlayerControlsOpacity(1f - it)
+                            },
+                            valueRange = 0.15f..0.85f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = scheme.accent,
+                                activeTrackColor = scheme.accent,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.15f),
+                            ),
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
                         Text(
                             text = "Источник: ${source.label}",
                             fontFamily = MetroFonts.text,
@@ -1655,8 +1702,8 @@ fun PlayerScreen(
                             backgroundColor = Color(0xFF101016)
                             blurRadius = 24.dp
                         }
-                        .background(Color(0xFF101016).copy(alpha = 0.58f))
-                        .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(14.dp))
+                        .background(hudPillGlass)
+                        .border(1.dp, hudBorder, RoundedCornerShape(14.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
                     Row(

@@ -405,6 +405,38 @@ fun SettingsScreen(
                             ),
                         )
                     }
+
+                    // Player Controls Transparency Slider
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = "Прозрачность оверлеев плеера",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 13.sp,
+                                color = scheme.text,
+                            )
+                            Text(
+                                text = "${((1f - settings.playerControlsOpacity) * 100).roundToInt()}%",
+                                fontFamily = MetroFonts.text,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = scheme.accent,
+                            )
+                        }
+                        Slider(
+                            value = 1f - settings.playerControlsOpacity,
+                            onValueChange = { settingsRepo.setPlayerControlsOpacity(1f - it) },
+                            valueRange = 0.15f..0.85f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = scheme.accent,
+                                activeTrackColor = scheme.accent,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.15f),
+                            ),
+                        )
+                    }
                 }
             }
 

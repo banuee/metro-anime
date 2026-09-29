@@ -53,6 +53,7 @@ data class AnimeSettings(
     val autoUpdateIntervalMinutes: Int = 0, // 0 = никогда, 10, 30, 60, ...
     val lastNotifiedVersion: String = "",
     val serostMode: Boolean = false,
+    val playerControlsOpacity: Float = 0.38f,
 )
 
 data class WallpaperBitmapHolder(
@@ -74,6 +75,7 @@ class MetroSettingsRepository(private val context: Context) {
         private val KEY_AUTO_UPDATE_INTERVAL = intPreferencesKey("auto_update_interval")
         private val KEY_LAST_NOTIFIED_VERSION = stringPreferencesKey("last_notified_version")
         private val KEY_SEROST_MODE = booleanPreferencesKey("serost_mode")
+        private val KEY_PLAYER_OPACITY = floatPreferencesKey("player_controls_opacity")
 
         val ACCENT_PRESETS = listOf(
             MetroAccentOption("Бирюзовый", 0xFF00ABA9.toInt()),
@@ -108,6 +110,7 @@ class MetroSettingsRepository(private val context: Context) {
             autoUpdateIntervalMinutes = prefs[KEY_AUTO_UPDATE_INTERVAL] ?: 0,
             lastNotifiedVersion = prefs[KEY_LAST_NOTIFIED_VERSION] ?: "",
             serostMode = prefs[KEY_SEROST_MODE] ?: false,
+            playerControlsOpacity = prefs[KEY_PLAYER_OPACITY] ?: 0.38f,
         )
     }
 
@@ -163,6 +166,15 @@ class MetroSettingsRepository(private val context: Context) {
         scope.launch {
             app.animeSettingsStore.edit { prefs ->
                 prefs[KEY_BG_DIM] = clamped
+            }
+        }
+    }
+
+    fun setPlayerControlsOpacity(opacity: Float) {
+        val clamped = opacity.coerceIn(0.10f, 0.90f)
+        scope.launch {
+            app.animeSettingsStore.edit { prefs ->
+                prefs[KEY_PLAYER_OPACITY] = clamped
             }
         }
     }
