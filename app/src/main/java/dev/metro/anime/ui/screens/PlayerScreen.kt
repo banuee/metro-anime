@@ -71,8 +71,10 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.LocalHazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 @OptIn(UnstableApi::class)
@@ -95,7 +97,7 @@ fun PlayerScreen(
     val currentSettings by settingsRepo.settings.collectAsState()
     val playerOpacity = currentSettings.playerControlsOpacity
     val hudPillGlass = Color(0xFF101016).copy(alpha = playerOpacity)
-    val hudCardGlass = Color(0xFF101016).copy(alpha = (playerOpacity * 1.25f).coerceIn(0.12f, 0.95f))
+    val hudCardGlass = hudPillGlass
     val hudBorder = Color.White.copy(alpha = (playerOpacity * 0.35f).coerceIn(0.05f, 0.25f))
 
     val hazeState = remember { HazeState() }
@@ -143,8 +145,9 @@ fun PlayerScreen(
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
-    var seekIndicatorText by remember { mutableStateOf<String?>(null) }
+    var seekCumulativeSeconds by remember { mutableStateOf(0) }
     var seekIndicatorSide by remember { mutableStateOf(0) } // -1 left, +1 right
+    var seekJob by remember { mutableStateOf<Job?>(null) }
 
     val currentEpisode by rememberUpdatedState(episode)
     val currentAnime by rememberUpdatedState(anime)
@@ -497,6 +500,33 @@ fun PlayerScreen(
         )
     }
 
+    val triggerSeek: (Int) -> Unit = { deltaSec ->
+        val current = exoPlayer.currentPosition
+        val target = if (deltaSec < 0) {
+            (current + deltaSec * 1000L).coerceAtLeast(0L)
+        } else {
+            (current + deltaSec * 1000L).coerceAtMost(durationMs)
+        }
+        exoPlayer.seekTo(target)
+
+        val side = if (deltaSec < 0) -1 else 1
+        if (seekIndicatorSide != side) {
+            seekCumulativeSeconds = deltaSec
+            seekIndicatorSide = side
+        } else {
+            seekCumulativeSeconds += deltaSec
+        }
+
+        seekJob?.cancel()
+        seekJob = coroutineScope.launch {
+            delay(850)
+            seekCumulativeSeconds = 0
+            seekIndicatorSide = 0
+        }
+    }
+    val currentTriggerSeek by rememberUpdatedState(triggerSeek)
+    val currentSeekCumulative by rememberUpdatedState(seekCumulativeSeconds)
+
     DisposableEffect(exoPlayer, forwardingPlayer, debouncer) {
         dev.metro.anime.ui.player.MediaButtonManager.onMediaKey = { keyEvent ->
             android.util.Log.d("PlayerScreen", "[MediaButtonManager] onMediaKey: keyCode=${keyEvent.keyCode}, action=${keyEvent.action}")
@@ -555,6 +585,7 @@ fun PlayerScreen(
         onDispose {
             dev.metro.anime.ui.player.MediaButtonManager.onMediaKey = null
             debouncer.cancel()
+            seekJob?.cancel()
         }
     }
 
@@ -782,13 +813,12 @@ fun PlayerScreen(
                     .pointerInput(baseSpeed, isControlsLocked) {
                         detectTapGestures(
                             onDoubleTap = {
-                                val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
-                                exoPlayer.seekTo(target)
-                                seekIndicatorText = "-10 сек"
-                                seekIndicatorSide = -1
+                                currentTriggerSeek(-10)
                             },
                             onTap = {
-                                if (!isControlsLocked) {
+                                if (currentSeekCumulative != 0) {
+                                    currentTriggerSeek(-10)
+                                } else if (!isControlsLocked) {
                                     showControls = !showControls
                                     showSpeedDialog = false
                                     showSettingsDialog = false
@@ -844,13 +874,12 @@ fun PlayerScreen(
                     .pointerInput(baseSpeed, isControlsLocked) {
                         detectTapGestures(
                             onDoubleTap = {
-                                val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(durationMs)
-                                exoPlayer.seekTo(target)
-                                seekIndicatorText = "+10 сек"
-                                seekIndicatorSide = 1
+                                currentTriggerSeek(10)
                             },
                             onTap = {
-                                if (!isControlsLocked) {
+                                if (currentSeekCumulative != 0) {
+                                    currentTriggerSeek(10)
+                                } else if (!isControlsLocked) {
                                     showControls = !showControls
                                     showSpeedDialog = false
                                     showSettingsDialog = false
@@ -906,8 +935,8 @@ fun PlayerScreen(
         // =====================================================================
         AnimatedVisibility(
             visible = isHoldingLeft || isHoldingRight,
-            enter = fadeIn() + scaleIn(),
-            exit = fadeOut() + scaleOut(),
+            enter = fadeIn(animationSpec = tween(150)),
+            exit = fadeOut(animationSpec = tween(200)),
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 28.dp),
@@ -921,7 +950,7 @@ fun PlayerScreen(
                         blurRadius = 24.dp
                     }
                     .background(hudPillGlass)
-                    .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
+                    .border(1.dp, hudBorder, RoundedCornerShape(MetroDimens.radiusSmall))
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             )
@@ -1000,20 +1029,16 @@ fun PlayerScreen(
         // =====================================================================
         // HUD: Seek Indicator (-10s / +10s)
         // =====================================================================
-        LaunchedEffect(seekIndicatorText) {
-            if (seekIndicatorText != null) {
-                delay(700)
-                seekIndicatorText = null
-            }
-        }
         AnimatedVisibility(
-            visible = seekIndicatorText != null,
-            enter = fadeIn() + scaleIn(),
-            exit = fadeOut() + scaleOut(),
+            visible = seekCumulativeSeconds != 0,
+            enter = fadeIn(animationSpec = tween(150)),
+            exit = fadeOut(animationSpec = tween(200)),
             modifier = Modifier.align(
                 if (seekIndicatorSide < 0) Alignment.CenterStart else Alignment.CenterEnd
             ).padding(horizontal = 48.dp),
         ) {
+            val displaySec = kotlin.math.abs(seekCumulativeSeconds)
+            val displayText = if (seekIndicatorSide < 0) "-$displaySec сек" else "+$displaySec сек"
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radius))
@@ -1022,11 +1047,10 @@ fun PlayerScreen(
                         blurRadius = 24.dp
                     }
                     .background(hudPillGlass)
-                    .border(1.dp, scheme.accent.copy(alpha = 0.6f), RoundedCornerShape(MetroDimens.radius))
+                    .border(1.dp, hudBorder, RoundedCornerShape(MetroDimens.radius))
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 contentAlignment = Alignment.Center,
-            )
- {
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1035,12 +1059,12 @@ fun PlayerScreen(
                         Icon(
                             imageVector = Icons.Default.FastRewind,
                             contentDescription = null,
-                            tint = scheme.text,
+                            tint = scheme.accent,
                             modifier = Modifier.size(24.dp),
                         )
                     }
                     Text(
-                        text = seekIndicatorText ?: "",
+                        text = displayText,
                         fontFamily = MetroFonts.headline,
                         fontWeight = FontWeight.Bold,
                         fontSize = 16.sp,
@@ -1050,7 +1074,7 @@ fun PlayerScreen(
                         Icon(
                             imageVector = Icons.Default.FastForward,
                             contentDescription = null,
-                            tint = scheme.text,
+                            tint = scheme.accent,
                             modifier = Modifier.size(24.dp),
                         )
                     }
@@ -1208,9 +1232,9 @@ fun PlayerScreen(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.35f),
+                                Color.Black.copy(alpha = 0.35f * playerOpacity),
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.45f),
+                                Color.Black.copy(alpha = 0.45f * playerOpacity),
                             ),
                         )
                     )

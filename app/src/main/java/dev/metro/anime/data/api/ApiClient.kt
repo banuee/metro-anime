@@ -82,7 +82,19 @@ object ApiClient {
     }
 
     suspend fun resolveShikimoriRussianTitle(query: String): String? = withContext(Dispatchers.IO) {
-        val url = "https://shikimori.one/api/animes?search=${java.net.URLEncoder.encode(query, "UTF-8")}&limit=1"
+        val cleanQuery = query.replace(
+            Regex("(?i)\\b(\\d+\\s*сезон|сезон\\s*\\d+|\\d+\\s*(?:st|nd|rd|th)?\\s*season|season\\s*\\d+|тв-?\\d+|тв\\s*\\d+)\\b"),
+            ""
+        ).trim()
+        val searchQuery = if (cleanQuery.isNotBlank()) cleanQuery else query
+        val isExplicitSeason1 = query.contains("1 сезон", ignoreCase = true) ||
+                query.contains("сезон 1", ignoreCase = true) ||
+                query.contains("тв-1", ignoreCase = true) ||
+                query.contains("тв 1", ignoreCase = true) ||
+                query.contains("1st season", ignoreCase = true) ||
+                query.contains("season 1", ignoreCase = true)
+
+        val url = "https://shikimori.io/api/animes?search=${java.net.URLEncoder.encode(searchQuery, "UTF-8")}&limit=5"
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "MetroAnime/1.0")
@@ -94,6 +106,21 @@ object ApiClient {
                 val body = response.body?.string() ?: return@withContext null
                 val arr = gson.fromJson(body, JsonArray::class.java)
                 if (arr != null && arr.size() > 0) {
+                    if (isExplicitSeason1) {
+                        for (elem in arr) {
+                            val obj = elem.asJsonObject
+                            val nameRu = obj.get("russian")?.takeIf { !it.isJsonNull }?.asString
+                            val nameEn = obj.get("name")?.takeIf { !it.isJsonNull }?.asString
+                            val title = nameRu ?: nameEn ?: continue
+                            val kind = obj.get("kind")?.takeIf { !it.isJsonNull }?.asString ?: ""
+                            val lower = title.lowercase()
+                            val isSeason2 = lower.contains(" 2") || lower.contains(" 2nd") || lower.contains("второй") || lower.contains("2 сезон")
+                            val isSpecial = kind in listOf("special", "ova", "movie")
+                            if (!isSeason2 && !isSpecial) {
+                                return@withContext title
+                            }
+                        }
+                    }
                     val first = arr[0].asJsonObject
                     return@withContext first.get("russian")?.takeIf { !it.isJsonNull }?.asString
                         ?: first.get("name")?.takeIf { !it.isJsonNull }?.asString
@@ -105,11 +132,11 @@ object ApiClient {
         }
     }
 
-    suspend fun searchKodikTitles(query: String, limit: Int = 20): List<AnimeTitle> = withContext(Dispatchers.IO) {
+    suspend fun searchKodikTitles(query: String, limit: Int = 100): List<AnimeTitle> = withContext(Dispatchers.IO) {
         val formBuilder = FormBody.Builder()
             .add("token", KODIK_TOKEN)
             .add("title", query)
-            .add("limit", limit.toString())
+            .add("limit", limit.coerceIn(1, 100).toString())
             .add("types", "anime,anime-serial")
 
         val request = Request.Builder()
@@ -306,6 +333,7 @@ object ApiClient {
         val formBuilder = FormBody.Builder()
             .add("token", KODIK_TOKEN)
             .add("with_episodes", "true")
+            .add("limit", "100")
 
         if (shikimoriId != null && shikimoriId > 0) {
             formBuilder.add("shikimori_id", shikimoriId.toString())
@@ -327,9 +355,74 @@ object ApiClient {
                 val root = gson.fromJson(body, JsonObject::class.java)
                 val results = root.getAsJsonArray("results") ?: return@withContext emptyList()
 
+                val queryLower = titleQuery?.lowercase() ?: ""
+                val isSpecialQuery = queryLower.contains("спешл") ||
+                        queryLower.contains("спэшл") ||
+                        queryLower.contains("special") ||
+                        queryLower.contains("ova") ||
+                        queryLower.contains("ова")
+
+                val isSeason2Query = queryLower.contains("[тв-2]") ||
+                        queryLower.contains("2 сезон") ||
+                        queryLower.contains("сезон 2") ||
+                        queryLower.contains("2nd season") ||
+                        queryLower.contains("тв 2")
+
+                val isSeason1Query = queryLower.contains("[тв-1]") ||
+                        queryLower.contains("1 сезон") ||
+                        queryLower.contains("сезон 1") ||
+                        queryLower.contains("1st season") ||
+                        queryLower.contains("тв 1")
+
                 val dubGroups = mutableListOf<DubbingGroup>()
                 for (res in results) {
                     val resObj = res.asJsonObject
+                    val resTitle = resObj.get("title")?.takeIf { !it.isJsonNull }?.asString ?: ""
+                    val resTitleLower = resTitle.lowercase()
+                    val resShiki = resObj.get("shikimori_id")?.takeIf { !it.isJsonNull }?.asLong
+                    val resType = resObj.get("type")?.takeIf { !it.isJsonNull }?.asString ?: ""
+
+                    // If a specific shikimoriId was requested and Kodik result has a shikimori_id, verify match
+                    if (shikimoriId != null && shikimoriId > 0 && resShiki != null && resShiki != shikimoriId) {
+                        continue
+                    }
+
+                    if (isSpecialQuery) {
+                        val isTvSeries = resTitleLower.contains("[тв-") ||
+                                resTitleLower.contains("сезон") ||
+                                (resType == "anime-serial" && (resObj.get("last_episode")?.asInt ?: 0) > 15)
+                        val isSpecialCandidate = resTitleLower.contains("спец") ||
+                                resTitleLower.contains("спешл") ||
+                                resTitleLower.contains("спэшл") ||
+                                resTitleLower.contains("ova") ||
+                                resTitleLower.contains("ова") ||
+                                resType == "anime"
+                        if (isTvSeries || !isSpecialCandidate) {
+                            continue
+                        }
+                    } else if (isSeason2Query) {
+                        val matchesS2 = resTitleLower.contains("[тв-2]") ||
+                                resTitleLower.contains("2 сезон") ||
+                                resTitleLower.contains("сезон 2") ||
+                                (resShiki != null && resShiki == 61967L)
+                        if (!matchesS2) {
+                            continue
+                        }
+                    } else if (isSeason1Query) {
+                        val isS2 = resTitleLower.contains("[тв-2]") ||
+                                resTitleLower.contains("2 сезон") ||
+                                resTitleLower.contains("сезон 2") ||
+                                (resShiki != null && resShiki == 61967L)
+                        val isSpecial = resTitleLower.contains("спец") ||
+                                resTitleLower.contains("спешл") ||
+                                resTitleLower.contains("спэшл") ||
+                                resTitleLower.contains("ova") ||
+                                resTitleLower.contains("ова")
+                        if (isS2 || isSpecial) {
+                            continue
+                        }
+                    }
+
                     val transObj = resObj.getAsJsonObject("translation") ?: continue
                     val transId = transObj.get("id")?.asString ?: "0"
                     val transTitle = transObj.get("title")?.asString ?: "Озвучка"
