@@ -4,6 +4,10 @@ set -e
 
 REPO="banuee/metro-anime"
 TOKEN_FILE="$HOME/.config/metro-launcher/github_token"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ ! -f "$TOKEN_FILE" ] && [ -f "$SCRIPT_DIR/../config/github_token" ]; then
+    TOKEN_FILE="$SCRIPT_DIR/../config/github_token"
+fi
 
 if [ ! -f "$TOKEN_FILE" ]; then
     echo "❌ Ошибка: файл токена $TOKEN_FILE не найден."

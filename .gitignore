@@ -17,3 +17,4 @@ app/build
 output.json
 AGENTS.md
 graphify-out/
+config/github_token

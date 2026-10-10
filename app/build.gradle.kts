@@ -24,9 +24,14 @@ android {
 
     signingConfigs {
         create("release") {
+            val projectKeyFile = rootProject.file("keystore/metro-release.keystore")
+            val defaultKeyPath = if (projectKeyFile.exists()) {
+                projectKeyFile.absolutePath
+            } else {
+                "${System.getProperty("user.home")}/.config/metro-launcher/metro-release.keystore"
+            }
             val keyFile = file(
-                localProps.getProperty("metro.storeFile")
-                    ?: "${System.getProperty("user.home")}/.config/metro-launcher/metro-release.keystore"
+                localProps.getProperty("metro.storeFile") ?: defaultKeyPath
             )
             if (keyFile.exists()) {
                 storeFile = keyFile
