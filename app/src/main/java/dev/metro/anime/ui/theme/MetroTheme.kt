@@ -26,9 +26,9 @@ data class MetroScheme(
     val surface: Color = Color(0xFF121216),
     val glass: Color = Color.White.copy(alpha = 0.08f),
     val glassHover: Color = Color.White.copy(alpha = 0.14f),
-    val glassDeep: Color = Color(0xFF141418).copy(alpha = 0.65f),
-    val stroke: Color = Color.White.copy(alpha = 0.10f),
-    val strokeStrong: Color = Color.White.copy(alpha = 0.18f),
+    val glassDeep: Color = Color.White.copy(alpha = 0.10f),
+    val stroke: Color = Color.White.copy(alpha = 0.12f),
+    val strokeStrong: Color = Color.White.copy(alpha = 0.20f),
     val text: Color = Color(0xFFF7F7F7),
     val textDim: Color = Color.White.copy(alpha = 0.60f),
     val red: Color = Color(0xFFE51400), // Windows Phone crimson red

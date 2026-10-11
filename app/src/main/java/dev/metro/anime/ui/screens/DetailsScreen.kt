@@ -540,7 +540,7 @@ fun EpisodeItemRow(
             .padding(horizontal = 16.dp, vertical = 4.dp)
             .metroClickable(onClick = onClick),
         shape = MetroDimens.radiusSmall,
-        tint = if (isCurrentWatched) scheme.glassHover else scheme.glass,
+        tint = if (isCurrentWatched) scheme.accent.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.04f),
         borderColor = if (isCurrentWatched) scheme.accent.copy(alpha = 0.6f) else scheme.stroke,
         borderWidth = MetroDimens.strokeWidth,
     ) {

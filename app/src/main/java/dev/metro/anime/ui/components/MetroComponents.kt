@@ -122,8 +122,8 @@ fun MetroIconButton(
         modifier = modifier
             .size(size)
             .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-            .background(scheme.glass)
-            .border(MetroDimens.strokeWidth, scheme.stroke, RoundedCornerShape(MetroDimens.radiusSmall))
+            .background(Color.White.copy(alpha = 0.09f))
+            .border(MetroDimens.strokeWidth, Color.White.copy(alpha = 0.15f), RoundedCornerShape(MetroDimens.radiusSmall))
             .metroClickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -211,9 +211,9 @@ fun MetroChip(
     modifier: Modifier = Modifier,
 ) {
     val scheme = LocalMetroScheme.current
-    val bg = if (isSelected) scheme.accent.copy(alpha = 0.85f) else scheme.glass
-    val border = if (isSelected) scheme.accent else scheme.stroke
-    val textColor = if (isSelected) Color.White else scheme.textDim
+    val bg = if (isSelected) scheme.accent.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.09f)
+    val border = if (isSelected) scheme.accent else Color.White.copy(alpha = 0.15f)
+    val textColor = if (isSelected) Color.White else scheme.text
 
     val clickMod = if (onClick != null) Modifier.metroClickable(onClick = onClick) else Modifier
 

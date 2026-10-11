@@ -116,13 +116,13 @@ fun FrostedGlassBox(
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(shape))
-            .background(Color(0xFF14141A).copy(alpha = 0.52f))
+            .background(Color.White.copy(alpha = 0.08f))
             .background(effectiveTint)
             .then(
                 if (borderColor != null) {
                     Modifier.border(borderWidth, borderColor, RoundedCornerShape(shape))
                 } else {
-                    Modifier.border(borderWidth, Color.White.copy(alpha = 0.12f), RoundedCornerShape(shape))
+                    Modifier.border(borderWidth, scheme.stroke, RoundedCornerShape(shape))
                 }
             ),
         contentAlignment = contentAlignment,

@@ -37,8 +37,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import dev.metro.anime.data.UpdateRepository
 import dev.metro.anime.data.model.*
 import dev.metro.anime.data.repository.AnimeRepository
+import dev.metro.anime.data.settings.MetroSettingsRepository
+import dev.metro.anime.data.sync.MetroSyncClient
 import dev.metro.anime.ui.components.*
 import dev.metro.anime.ui.theme.FrostedGlassBox
 import dev.metro.anime.ui.theme.LocalMetroScheme
@@ -52,11 +55,15 @@ enum class HomeTab(val label: String, val pivotLabel: String) {
     HISTORY("История", "история"),
     SEARCH("Поиск", "поиск"),
     BOOKMARKS("Избранное", "избранное"),
+    SETTINGS("Параметры", "параметры"),
 }
 
 @Composable
 fun HomeScreen(
     repository: AnimeRepository,
+    settingsRepo: MetroSettingsRepository,
+    updateRepo: UpdateRepository,
+    syncClient: MetroSyncClient? = null,
     onAnimeClick: (AnimeTitle) -> Unit,
     onOpenSettings: () -> Unit,
     usePivotHeader: Boolean = true,
@@ -65,7 +72,16 @@ fun HomeScreen(
     val scheme = LocalMetroScheme.current
     val scope = rememberCoroutineScope()
 
-    val pagerState = rememberPagerState(initialPage = 0, pageCount = { HomeTab.entries.size })
+    val tabsCount = HomeTab.entries.size
+    val infinitePageCount = tabsCount * 2000
+    val initialPage = (infinitePageCount / 2) - ((infinitePageCount / 2) % tabsCount)
+
+    fun pageToTab(page: Int): HomeTab {
+        val mod = ((page % tabsCount) + tabsCount) % tabsCount
+        return HomeTab.entries[mod]
+    }
+
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { infinitePageCount })
     var activeTab by remember { mutableStateOf(HomeTab.LATEST) }
     var searchQuery by remember { mutableStateOf("") }
 
@@ -116,10 +132,10 @@ fun HomeScreen(
         loadLatest()
     }
 
-    // Sync HorizontalPager page changes with activeTab
+    // Sync infinite HorizontalPager page changes with activeTab
     LaunchedEffect(pagerState.currentPage) {
         if (usePivotHeader) {
-            val pageTab = HomeTab.entries[pagerState.currentPage]
+            val pageTab = pageToTab(pagerState.currentPage)
             if (activeTab != pageTab) {
                 activeTab = pageTab
                 if (pageTab == HomeTab.LATEST && latestList.isEmpty()) {
@@ -129,13 +145,8 @@ fun HomeScreen(
         }
     }
 
-    val onSelectTab: (HomeTab) -> Unit = { tab ->
+    val onSelectClassicTab: (HomeTab) -> Unit = { tab ->
         activeTab = tab
-        if (usePivotHeader) {
-            scope.launch {
-                pagerState.animateScrollToPage(tab.ordinal)
-            }
-        }
         if (tab == HomeTab.LATEST && latestList.isEmpty()) {
             loadLatest()
         }
@@ -151,50 +162,38 @@ fun HomeScreen(
     ) {
         if (usePivotHeader) {
             // =================================================================
-            // Windows Phone Pivot / Metro Gallery Style Header
+            // Windows Phone Pivot / Metro Hub Header
             // =================================================================
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp, bottom = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "METRO ANIME",
-                    fontFamily = MetroFonts.headline,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp,
-                    letterSpacing = 2.sp,
-                    color = scheme.textDim,
-                )
-                MetroIconButton(
-                    icon = Icons.Default.Settings,
-                    contentDescription = "Параметры",
-                    onClick = onOpenSettings,
-                    size = 36.dp,
-                )
-            }
+            Text(
+                text = "METRO ANIME",
+                fontFamily = MetroFonts.headline,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                letterSpacing = 2.sp,
+                color = scheme.textDim,
+                modifier = Modifier.padding(top = 6.dp, bottom = 0.dp),
+            )
 
-            // Pivot Header Titles Row
-            val pivotListState = rememberLazyListState()
-            LaunchedEffect(activeTab) {
-                pivotListState.animateScrollToItem(activeTab.ordinal)
+            // Infinite Pivot Header Titles Row (прижато вплотную к METRO ANIME)
+            val pivotListState = rememberLazyListState(initialFirstVisibleItemIndex = initialPage)
+            LaunchedEffect(pagerState.currentPage) {
+                pivotListState.animateScrollToItem(pagerState.currentPage)
             }
 
             LazyRow(
                 state = pivotListState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    .padding(top = 0.dp, bottom = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(22.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                items(HomeTab.entries) { tab ->
-                    val isSelected = activeTab == tab
+                items(infinitePageCount) { index ->
+                    val tab = pageToTab(index)
+                    val isSelected = index == pagerState.currentPage
                     val alpha by animateFloatAsState(
                         targetValue = if (isSelected) 1f else 0.35f,
-                        animationSpec = tween(durationMillis = 220),
+                        animationSpec = tween(durationMillis = 200),
                         label = "pivot_tab_alpha",
                     )
                     Text(
@@ -205,21 +204,23 @@ fun HomeScreen(
                         letterSpacing = (-0.5).sp,
                         color = scheme.text.copy(alpha = alpha),
                         modifier = Modifier.metroClickable(targetScale = 0.96f) {
-                            onSelectTab(tab)
+                            scope.launch {
+                                pagerState.animateScrollToPage(index)
+                            }
                         },
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            // Swipeable Content with HorizontalPager
+            // Infinite Swipeable Content with HorizontalPager
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.weight(1f),
                 beyondViewportPageCount = 1,
             ) { page ->
-                when (HomeTab.entries[page]) {
+                when (pageToTab(page)) {
                     HomeTab.LATEST -> LatestTabContent(
                         isLoading = isLoading,
                         errorMessage = errorMessage,
@@ -254,11 +255,22 @@ fun HomeScreen(
                         bookmarks = bookmarks,
                         onAnimeClick = onAnimeClick,
                     )
+
+                    HomeTab.SETTINGS -> {
+                        SettingsScreen(
+                            settingsRepo = settingsRepo,
+                            updateRepo = updateRepo,
+                            animeRepo = repository,
+                            syncClient = syncClient,
+                            onBackClick = {},
+                            isEmbedded = true,
+                        )
+                    }
                 }
             }
         } else {
             // =================================================================
-            // Classic Metro Header with Chips (легкий откат к прежнему виду)
+            // Classic Metro Header with Chips (быстрый откат / альтернативный режим)
             // =================================================================
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -284,7 +296,7 @@ fun HomeScreen(
                     MetroChip(
                         text = tab.label,
                         isSelected = activeTab == tab,
-                        onClick = { onSelectTab(tab) },
+                        onClick = { onSelectClassicTab(tab) },
                     )
                 }
             }
@@ -341,6 +353,17 @@ fun HomeScreen(
                         bookmarks = bookmarks,
                         onAnimeClick = onAnimeClick,
                     )
+
+                    HomeTab.SETTINGS -> {
+                        SettingsScreen(
+                            settingsRepo = settingsRepo,
+                            updateRepo = updateRepo,
+                            animeRepo = repository,
+                            syncClient = syncClient,
+                            onBackClick = onOpenSettings,
+                            isEmbedded = true,
+                        )
+                    }
                 }
             }
         }
@@ -399,8 +422,8 @@ private fun LatestTabContent(
                         .padding(bottom = 12.dp)
                         .metroClickable { onAnimeClick(last.anime.sanitized()) },
                     shape = MetroDimens.radiusSmall,
-                    tint = scheme.glassHover,
-                    borderColor = scheme.accent.copy(alpha = 0.45f),
+                    tint = Color.White.copy(alpha = 0.06f),
+                    borderColor = scheme.accent.copy(alpha = 0.50f),
                     borderWidth = 1.dp,
                 ) {
                     Row(
@@ -643,7 +666,7 @@ fun HistoryItemCard(
             .fillMaxWidth()
             .metroClickable(onClick = onClick),
         shape = MetroDimens.radiusSmall,
-        tint = scheme.glass,
+        tint = Color.White.copy(alpha = 0.05f),
         borderColor = scheme.stroke,
         borderWidth = MetroDimens.strokeWidth,
     ) {

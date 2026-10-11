@@ -68,7 +68,8 @@ fun SettingsScreen(
     updateRepo: UpdateRepository,
     animeRepo: AnimeRepository,
     syncClient: dev.metro.anime.data.sync.MetroSyncClient? = null,
-    onBackClick: () -> Unit,
+    onBackClick: () -> Unit = {},
+    isEmbedded: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val scheme = LocalMetroScheme.current
@@ -182,21 +183,23 @@ fun SettingsScreen(
         }
     }
 
+    val containerModifier = if (isEmbedded) modifier.fillMaxSize() else modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+    val scrollPadding = if (isEmbedded) PaddingValues(horizontal = 0.dp, vertical = 8.dp) else PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding(),
+        modifier = containerModifier,
     ) {
-        // Top Bar
-        MetroTopBar(
-            title = "Параметры",
-            onBackClick = onBackClick,
-        )
+        if (!isEmbedded) {
+            // Top Bar
+            MetroTopBar(
+                title = "Параметры",
+                onBackClick = onBackClick,
+            )
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            contentPadding = scrollPadding,
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             // =================================================================
