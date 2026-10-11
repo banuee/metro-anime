@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var updateRepository: UpdateRepository
     private lateinit var syncClient: dev.metro.anime.data.sync.MetroSyncClient
     private var openUpdatesRequest = mutableStateOf(false)
+    private var activeScreenState = mutableStateOf<Screen>(Screen.Home)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -67,10 +68,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (activeScreenState.value !is Screen.Player) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
         if (::syncClient.isInitialized) {
             lifecycleScope.launch(Dispatchers.IO) {
                 syncClient.autoSyncIfPaired()
             }
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (activeScreenState.value !is Screen.Player && newConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
     }
 
@@ -92,6 +103,7 @@ class MainActivity : ComponentActivity() {
 
         if (intent?.getBooleanExtra("open_updates", false) == true) {
             openUpdatesRequest.value = true
+            activeScreenState.value = Screen.Settings
         }
 
         setContent {
@@ -106,9 +118,7 @@ class MainActivity : ComponentActivity() {
             }
 
             val openUpdates by openUpdatesRequest
-            var currentScreen by remember {
-                mutableStateOf<Screen>(if (openUpdates) Screen.Settings else Screen.Home)
-            }
+            var currentScreen by activeScreenState
 
             LaunchedEffect(openUpdates) {
                 if (openUpdates) {

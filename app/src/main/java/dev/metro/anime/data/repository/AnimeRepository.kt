@@ -141,10 +141,18 @@ class AnimeRepository(context: Context) {
             details = aniDetails
         }
 
+        val fillers = try {
+            ApiClient.fetchFillerEpisodes(details.title.titleOrig, details.title.titleRu.ifBlank { titleQuery })
+        } catch (_: Exception) {
+            emptySet()
+        }
+
         val allDubs = mutableListOf<DubbingGroup>()
         // Format AniLibria dub
         for (ad in details.dubbings) {
-            val eps = ad.episodes.sortedBy { it.ordinal }
+            val eps = ad.episodes.sortedBy { it.ordinal }.map { ep ->
+                if (fillers.contains(ep.ordinal)) ep.copy(isFiller = true) else ep
+            }
             val first = eps.firstOrNull()?.ordinal ?: 1
             val last = eps.lastOrNull()?.ordinal ?: eps.size
             val count = eps.size
@@ -161,7 +169,9 @@ class AnimeRepository(context: Context) {
             if (kd.title.contains("AniLibria", ignoreCase = true) && allDubs.isNotEmpty()) {
                 continue
             }
-            val eps = kd.episodes.sortedBy { it.ordinal }
+            val eps = kd.episodes.sortedBy { it.ordinal }.map { ep ->
+                if (fillers.contains(ep.ordinal)) ep.copy(isFiller = true) else ep
+            }
             val first = eps.firstOrNull()?.ordinal ?: 1
             val last = eps.lastOrNull()?.ordinal ?: eps.size
             val count = eps.size

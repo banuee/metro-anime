@@ -50,6 +50,7 @@ data class AnimeEpisode(
     val durationSec: Int? = null,
     val opening: SkipTimestamps? = null,
     val ending: SkipTimestamps? = null,
+    val isFiller: Boolean = false,
 )
 
 data class DubbingGroup(

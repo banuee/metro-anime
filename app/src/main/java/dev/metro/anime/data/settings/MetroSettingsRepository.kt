@@ -54,6 +54,8 @@ data class AnimeSettings(
     val lastNotifiedVersion: String = "",
     val serostMode: Boolean = false,
     val playerControlsOpacity: Float = 0.38f,
+    val playerBlurEnabled: Boolean = true,
+    val playerBlurRadius: Int = 24,
 )
 
 data class WallpaperBitmapHolder(
@@ -76,6 +78,8 @@ class MetroSettingsRepository(private val context: Context) {
         private val KEY_LAST_NOTIFIED_VERSION = stringPreferencesKey("last_notified_version")
         private val KEY_SEROST_MODE = booleanPreferencesKey("serost_mode")
         private val KEY_PLAYER_OPACITY = floatPreferencesKey("player_controls_opacity")
+        private val KEY_PLAYER_BLUR_ENABLED = booleanPreferencesKey("player_blur_enabled")
+        private val KEY_PLAYER_BLUR_RADIUS = intPreferencesKey("player_blur_radius")
 
         val ACCENT_PRESETS = listOf(
             MetroAccentOption("Бирюзовый", 0xFF00ABA9.toInt()),
@@ -111,6 +115,8 @@ class MetroSettingsRepository(private val context: Context) {
             lastNotifiedVersion = prefs[KEY_LAST_NOTIFIED_VERSION] ?: "",
             serostMode = prefs[KEY_SEROST_MODE] ?: false,
             playerControlsOpacity = prefs[KEY_PLAYER_OPACITY] ?: 0.38f,
+            playerBlurEnabled = prefs[KEY_PLAYER_BLUR_ENABLED] ?: true,
+            playerBlurRadius = prefs[KEY_PLAYER_BLUR_RADIUS] ?: 24,
         )
     }
 
@@ -179,6 +185,23 @@ class MetroSettingsRepository(private val context: Context) {
         }
     }
 
+    fun setPlayerBlurEnabled(enabled: Boolean) {
+        scope.launch {
+            app.animeSettingsStore.edit { prefs ->
+                prefs[KEY_PLAYER_BLUR_ENABLED] = enabled
+            }
+        }
+    }
+
+    fun setPlayerBlurRadius(radius: Int) {
+        val clamped = radius.coerceIn(4, 50)
+        scope.launch {
+            app.animeSettingsStore.edit { prefs ->
+                prefs[KEY_PLAYER_BLUR_RADIUS] = clamped
+            }
+        }
+    }
+
     fun setAutoUpdateInterval(minutes: Int) {
         val valid = minutes.coerceAtLeast(0)
         scope.launch {
@@ -237,6 +260,9 @@ class MetroSettingsRepository(private val context: Context) {
             prefs[KEY_AUTO_UPDATE_INTERVAL] = newSettings.autoUpdateIntervalMinutes
             prefs[KEY_LAST_NOTIFIED_VERSION] = newSettings.lastNotifiedVersion
             prefs[KEY_SEROST_MODE] = newSettings.serostMode
+            prefs[KEY_PLAYER_OPACITY] = newSettings.playerControlsOpacity
+            prefs[KEY_PLAYER_BLUR_ENABLED] = newSettings.playerBlurEnabled
+            prefs[KEY_PLAYER_BLUR_RADIUS] = newSettings.playerBlurRadius
         }
     }
 
@@ -275,7 +301,7 @@ class MetroSettingsRepository(private val context: Context) {
     }
 
     private fun screenSize(): Pair<Int, Int> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val (w, h) = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 val metrics = app.getSystemService(android.view.WindowManager::class.java)
                     .currentWindowMetrics.bounds
@@ -286,6 +312,8 @@ class MetroSettingsRepository(private val context: Context) {
         } else {
             fallbackSize()
         }
+        // Metro wallpaper is always displayed in portrait orientation behind UI screens
+        return minOf(w, h) to maxOf(w, h)
     }
 
     private fun fallbackSize(): Pair<Int, Int> {

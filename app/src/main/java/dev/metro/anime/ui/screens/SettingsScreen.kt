@@ -437,6 +437,72 @@ fun SettingsScreen(
                             ),
                         )
                     }
+
+                    // Player Acrylic Blur Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Акриловый блюр в плеере",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 14.sp,
+                                color = scheme.text,
+                            )
+                            Text(
+                                text = "Размытие фона под кнопками и оверлеями плеера",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 11.sp,
+                                color = scheme.textDim,
+                            )
+                        }
+                        Switch(
+                            checked = settings.playerBlurEnabled,
+                            onCheckedChange = { settingsRepo.setPlayerBlurEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = scheme.accent,
+                                checkedTrackColor = scheme.glassHover,
+                                uncheckedThumbColor = scheme.textDim,
+                                uncheckedTrackColor = scheme.glass,
+                            ),
+                        )
+                    }
+
+                    // Player Blur Radius Slider
+                    if (settings.playerBlurEnabled) {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = "Сила блюра в плеере",
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 13.sp,
+                                    color = scheme.text,
+                                )
+                                Text(
+                                    text = "${settings.playerBlurRadius} dp",
+                                    fontFamily = MetroFonts.text,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = scheme.accent,
+                                )
+                            }
+                            Slider(
+                                value = settings.playerBlurRadius.toFloat(),
+                                onValueChange = { settingsRepo.setPlayerBlurRadius(it.roundToInt()) },
+                                valueRange = 4f..48f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = scheme.accent,
+                                    activeTrackColor = scheme.accent,
+                                    inactiveTrackColor = Color.White.copy(alpha = 0.15f),
+                                ),
+                            )
+                        }
+                    }
                 }
             }
 

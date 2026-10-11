@@ -58,6 +58,7 @@ import dev.metro.anime.data.model.AnimeEpisode
 import dev.metro.anime.data.model.AnimeSource
 import dev.metro.anime.data.model.AnimeTitle
 import dev.metro.anime.data.repository.AnimeRepository
+import kotlin.math.roundToInt
 import dev.metro.anime.data.settings.MetroSettingsRepository
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -102,11 +103,24 @@ fun PlayerScreen(
     val hudBorder = Color.White.copy(alpha = (playerOpacity * 0.35f).coerceIn(0.05f, 0.25f))
 
     val hazeState = remember { HazeState() }
-    val playerHazeStyle = remember {
+    val playerBlurEnabled = currentSettings.playerBlurEnabled
+    val playerBlurRadius = currentSettings.playerBlurRadius.dp
+    val playerHazeStyle = remember(playerBlurRadius) {
         HazeDefaults.style(
             backgroundColor = Color.Transparent,
-            blurRadius = 24.dp,
+            blurRadius = playerBlurRadius,
         )
+    }
+
+    fun Modifier.playerHaze(state: HazeState): Modifier {
+        return if (playerBlurEnabled) {
+            this.hazeEffect(state = state) {
+                backgroundColor = Color.Transparent
+                blurRadius = playerBlurRadius
+            }
+        } else {
+            this
+        }
     }
 
     var playPausePulseVisible by remember { mutableStateOf(false) }
@@ -936,10 +950,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .size(76.dp)
                     .clip(RoundedCornerShape(38.dp))
-                    .hazeEffect(state = hazeState) {
-                        backgroundColor = Color.Transparent
-                        blurRadius = 24.dp
-                    }
+                    .playerHaze(hazeState)
                     .background(hudPillGlass)
                     .border(1.5.dp, scheme.accent.copy(alpha = 0.8f), RoundedCornerShape(38.dp)),
                 contentAlignment = Alignment.Center,
@@ -974,10 +985,7 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                    .hazeEffect(state = hazeState) {
-                        backgroundColor = Color.Transparent
-                        blurRadius = 24.dp
-                    }
+                    .playerHaze(hazeState)
                     .background(hudPillGlass)
                     .border(1.dp, hudBorder, RoundedCornerShape(MetroDimens.radiusSmall))
                     .padding(horizontal = 16.dp, vertical = 6.dp),
@@ -1029,10 +1037,7 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                    .hazeEffect(state = hazeState) {
-                        backgroundColor = Color.Transparent
-                        blurRadius = 24.dp
-                    }
+                    .playerHaze(hazeState)
                     .background(hudPillGlass)
                     .border(1.dp, if (lastUpscaleEnabled) scheme.accent else Color.White.copy(alpha = 0.2f), RoundedCornerShape(MetroDimens.radiusSmall))
                     .padding(horizontal = 16.dp, vertical = 6.dp),
@@ -1074,10 +1079,7 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radius))
-                    .hazeEffect(state = hazeState) {
-                        backgroundColor = Color.Transparent
-                        blurRadius = 24.dp
-                    }
+                    .playerHaze(hazeState)
                     .background(hudPillGlass)
                     .border(1.dp, hudBorder, RoundedCornerShape(MetroDimens.radius))
                     .padding(horizontal = 20.dp, vertical = 12.dp),
@@ -1199,10 +1201,7 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                    .hazeEffect(state = hazeState) {
-                        backgroundColor = Color.Transparent
-                        blurRadius = 24.dp
-                    }
+                    .playerHaze(hazeState)
                     .background(hudPillGlass)
                     .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
                     .metroClickable {
@@ -1248,10 +1247,7 @@ fun PlayerScreen(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .hazeEffect(state = hazeState) {
-                        backgroundColor = Color.Transparent
-                        blurRadius = 24.dp
-                    }
+                    .playerHaze(hazeState)
                     .background(hudPillGlass)
                     .border(1.dp, scheme.accent, RoundedCornerShape(10.dp))
                     .metroClickable { isControlsLocked = false },
@@ -1302,10 +1298,7 @@ fun PlayerScreen(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
                             .clip(RoundedCornerShape(12.dp))
-                            .hazeEffect(state = hazeState) {
-                                backgroundColor = Color.Transparent
-                                blurRadius = 24.dp
-                            }
+                            .playerHaze(hazeState)
                             .background(hudPillGlass)
                             .border(1.dp, hudBorder, RoundedCornerShape(12.dp))
                             .padding(horizontal = 4.dp, vertical = 2.dp),
@@ -1368,10 +1361,7 @@ fun PlayerScreen(
                         modifier = Modifier
                             .align(Alignment.Center)
                             .clip(RoundedCornerShape(12.dp))
-                            .hazeEffect(state = hazeState) {
-                                backgroundColor = Color.Transparent
-                                blurRadius = 24.dp
-                            }
+                            .playerHaze(hazeState)
                             .background(hudPillGlass)
                             .border(1.dp, hudBorder, RoundedCornerShape(12.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
@@ -1411,6 +1401,24 @@ fun PlayerScreen(
                                 fontSize = 13.sp,
                                 color = scheme.text,
                             )
+                            if (episode.isFiller) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFFFF9800).copy(alpha = 0.25f))
+                                        .border(1.dp, Color(0xFFFF9800).copy(alpha = 0.7f), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                                ) {
+                                    Text(
+                                        text = "Филлер",
+                                        fontFamily = MetroFonts.text,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp,
+                                        color = Color(0xFFFFB74D),
+                                    )
+                                }
+                            }
                         }
 
                         IconButton(
@@ -1435,10 +1443,7 @@ fun PlayerScreen(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .clip(RoundedCornerShape(12.dp))
-                        .hazeEffect(state = hazeState) {
-                            backgroundColor = Color.Transparent
-                            blurRadius = 24.dp
-                        }
+                        .playerHaze(hazeState)
                         .background(hudPillGlass)
                         .border(1.dp, hudBorder, RoundedCornerShape(12.dp))
                         .padding(horizontal = 4.dp, vertical = 2.dp),
@@ -1502,10 +1507,7 @@ fun PlayerScreen(
                         modifier = Modifier
                             .width(260.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .hazeEffect(state = hazeState) {
-                                backgroundColor = Color.Transparent
-                                blurRadius = 24.dp
-                            }
+                            .playerHaze(hazeState)
                             .background(hudCardGlass)
                             .border(1.dp, hudBorder, RoundedCornerShape(12.dp))
                             .padding(14.dp),
@@ -1605,10 +1607,7 @@ fun PlayerScreen(
                         modifier = Modifier
                             .width(260.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .hazeEffect(state = hazeState) {
-                                backgroundColor = Color.Transparent
-                                blurRadius = 24.dp
-                            }
+                            .playerHaze(hazeState)
                             .background(hudCardGlass)
                             .border(1.dp, hudBorder, RoundedCornerShape(12.dp))
                             .padding(14.dp),
@@ -1752,6 +1751,63 @@ fun PlayerScreen(
                             ),
                         )
 
+                        // Player Blur Toggle & Slider
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Акриловый блюр",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 12.sp,
+                                color = scheme.text,
+                            )
+                            Switch(
+                                checked = currentSettings.playerBlurEnabled,
+                                onCheckedChange = { settingsRepo.setPlayerBlurEnabled(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = scheme.accent,
+                                    checkedTrackColor = scheme.glassHover,
+                                    uncheckedThumbColor = scheme.textDim,
+                                    uncheckedTrackColor = scheme.glass,
+                                ),
+                            )
+                        }
+
+                        if (currentSettings.playerBlurEnabled) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    text = "Сила блюра",
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 12.sp,
+                                    color = scheme.textDim,
+                                )
+                                Text(
+                                    text = "${currentSettings.playerBlurRadius} dp",
+                                    fontFamily = MetroFonts.text,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = scheme.accent,
+                                )
+                            }
+                            Slider(
+                                value = currentSettings.playerBlurRadius.toFloat(),
+                                onValueChange = { settingsRepo.setPlayerBlurRadius(it.roundToInt()) },
+                                valueRange = 4f..48f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = scheme.accent,
+                                    activeTrackColor = scheme.accent,
+                                    inactiveTrackColor = Color.White.copy(alpha = 0.15f),
+                                ),
+                            )
+                        }
+
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
@@ -1782,10 +1838,7 @@ fun PlayerScreen(
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 20.dp, vertical = 14.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .hazeEffect(state = hazeState) {
-                            backgroundColor = Color.Transparent
-                            blurRadius = 24.dp
-                        }
+                        .playerHaze(hazeState)
                         .background(hudPillGlass)
                         .border(1.dp, hudBorder, RoundedCornerShape(14.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp),

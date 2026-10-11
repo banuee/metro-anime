@@ -571,13 +571,33 @@ fun EpisodeItemRow(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Серия ${episode.ordinal}",
-                        fontFamily = MetroFonts.headline,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
-                        color = scheme.text,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Серия ${episode.ordinal}",
+                            fontFamily = MetroFonts.headline,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp,
+                            color = scheme.text,
+                        )
+                        if (episode.isFiller) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(0xFFFF9800).copy(alpha = 0.20f))
+                                    .border(1.dp, Color(0xFFFF9800).copy(alpha = 0.55f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            ) {
+                                Text(
+                                    text = "Филлер",
+                                    fontFamily = MetroFonts.text,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    color = Color(0xFFFFB74D),
+                                )
+                            }
+                        }
+                    }
                     if (!episode.name.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(

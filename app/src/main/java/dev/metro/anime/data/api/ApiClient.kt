@@ -645,4 +645,178 @@ object ApiClient {
             null
         }
     }
+
+    // =========================================================================
+    // AnimeFillerList Scraper (Filler episode ordinals)
+    // =========================================================================
+
+    private val fillerCache = java.util.concurrent.ConcurrentHashMap<String, Set<Int>>()
+    private var animeFillerShowsList: List<Pair<String, String>>? = null
+
+    private fun normalizeTitleForSearch(s: String): String {
+        return s.lowercase()
+            .replace("uu", "u")
+            .replace("ou", "o")
+            .replace(Regex("[^a-z0-9\\s]"), " ")
+            .trim()
+    }
+
+    private fun buildCandidateSlug(title: String): String {
+        return title.lowercase()
+            .replace(":", "")
+            .replace("'", "")
+            .replace(Regex("[^a-z0-9]+"), "-")
+            .trim('-')
+    }
+
+    suspend fun fetchFillerEpisodes(titleOrig: String?, titleRu: String?): Set<Int> = withContext(Dispatchers.IO) {
+        val cacheKey = "${titleOrig.orEmpty()}_${titleRu.orEmpty()}".trim()
+        if (cacheKey.isBlank()) return@withContext emptySet()
+        fillerCache[cacheKey]?.let { return@withContext it }
+
+        // Clean titles of common season tags e.g. "TV-1", "2 сезон", "1st Season"
+        val seasonRegex = Regex("(?i)\\b(\\d+\\s*сезон|сезон\\s*\\d+|\\d+\\s*(?:st|nd|rd|th)?\\s*season|season\\s*\\d+|тв-?\\d+|тв\\s*\\d+)\\b")
+        val cleanOrig = titleOrig?.replace(seasonRegex, "")?.trim()
+
+        val candidateSlugs = mutableListOf<String>()
+        if (!cleanOrig.isNullOrBlank()) {
+            candidateSlugs.add(buildCandidateSlug(cleanOrig))
+            val mainPart = cleanOrig.substringBefore(':').substringBefore('-').trim()
+            if (mainPart.isNotBlank() && mainPart != cleanOrig) {
+                candidateSlugs.add(buildCandidateSlug(mainPart))
+            }
+        }
+        if (!titleOrig.isNullOrBlank() && titleOrig != cleanOrig) {
+            candidateSlugs.add(buildCandidateSlug(titleOrig))
+        }
+
+        var html: String? = null
+        for (slug in candidateSlugs.distinct()) {
+            if (slug.isBlank()) continue
+            html = fetchFillerListHtml(slug)
+            if (html != null) break
+        }
+
+        // If direct slugs didn't hit, search in /shows index
+        if (html == null && (!cleanOrig.isNullOrBlank() || !titleOrig.isNullOrBlank())) {
+            val query = cleanOrig ?: titleOrig.orEmpty()
+            val matchedSlug = findBestShowSlug(query)
+            if (matchedSlug != null) {
+                html = fetchFillerListHtml(matchedSlug)
+            }
+        }
+
+        if (html == null) {
+            fillerCache[cacheKey] = emptySet()
+            return@withContext emptySet()
+        }
+
+        val result = parseFillerEpisodesFromHtml(html)
+        fillerCache[cacheKey] = result
+        result
+    }
+
+    private fun fetchFillerListHtml(slug: String): String? {
+        val url = "https://www.animefillerlist.com/shows/$slug"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            .build()
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) response.body?.string() else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun findBestShowSlug(query: String): String? {
+        val shows = getOrFetchFillerShowsList() ?: return null
+        val normQuery = normalizeTitleForSearch(query)
+        val queryWords = normQuery.split(Regex("\\s+")).filter { it.length > 1 && it !in setOf("the", "and", "season") }
+        if (queryWords.isEmpty()) return null
+
+        var bestSlug: String? = null
+        var bestScore = 0.0
+
+        for ((slug, name) in shows) {
+            val normName = normalizeTitleForSearch(name)
+            val nameWords = normName.split(Regex("\\s+")).toSet()
+            val common = queryWords.count { nameWords.contains(it) }
+            val score = common.toDouble() / queryWords.size.toDouble()
+
+            val firstWordMatch = queryWords.firstOrNull()?.let { nameWords.contains(it) } == true
+            val totalScore = score + (if (firstWordMatch) 0.35 else 0.0)
+
+            if (totalScore > bestScore && totalScore >= 0.7) {
+                bestScore = totalScore
+                bestSlug = slug
+            }
+        }
+        return bestSlug
+    }
+
+    private fun getOrFetchFillerShowsList(): List<Pair<String, String>>? {
+        animeFillerShowsList?.let { return it }
+        val url = "https://www.animefillerlist.com/shows"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            .build()
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val body = response.body?.string() ?: return null
+                val pattern = Pattern.compile("<a href=\"/shows/([^\"]+)\">([^<]+)</a>")
+                val matcher = pattern.matcher(body)
+                val list = mutableListOf<Pair<String, String>>()
+                while (matcher.find()) {
+                    val slug = matcher.group(1) ?: continue
+                    val name = matcher.group(2) ?: continue
+                    list.add(Pair(slug, name))
+                }
+                animeFillerShowsList = list
+                list
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun parseFillerEpisodesFromHtml(html: String): Set<Int> {
+        val fillers = mutableSetOf<Int>()
+
+        // 1. Try parsing from the summary: <div class="filler">...<span class="Episodes">(...)</span></div>
+        val summaryMatcher = Pattern.compile("<div class=\"filler\">.*?<span class=\"Episodes\">(.*?)</span>", Pattern.DOTALL).matcher(html)
+        if (summaryMatcher.find()) {
+            val rawEpisodes = summaryMatcher.group(1)?.replace(Regex("<[^>]+>"), "")?.trim() ?: ""
+            for (token in rawEpisodes.split(",")) {
+                val part = token.trim()
+                if (part.contains("-")) {
+                    val bounds = part.split("-")
+                    val start = bounds.getOrNull(0)?.trim()?.toIntOrNull()
+                    val end = bounds.getOrNull(1)?.trim()?.toIntOrNull()
+                    if (start != null && end != null && start <= end) {
+                        for (i in start..end) fillers.add(i)
+                    }
+                } else {
+                    part.toIntOrNull()?.let { fillers.add(it) }
+                }
+            }
+        }
+
+        // 2. Also parse table rows: <tr class="...filler..." id="eps-XX">...<td class="Number">XX</td>
+        val rowMatcher = Pattern.compile("<tr class=\"([^\"]*filler[^\"]*)\"[^>]*id=\"eps-(\\d+)\"").matcher(html)
+        while (rowMatcher.find()) {
+            val cls = rowMatcher.group(1) ?: ""
+            val epNum = rowMatcher.group(2)?.toIntOrNull() ?: continue
+            val classes = cls.split(Regex("\\s+"))
+            if (classes.contains("filler")) {
+                fillers.add(epNum)
+            }
+        }
+
+        return fillers
+    }
 }
