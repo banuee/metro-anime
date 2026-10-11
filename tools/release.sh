@@ -60,16 +60,7 @@ git push origin "$TAG_NAME" -f
 
 # 4. Создание GitHub Release
 echo "🌐 Создание релиза на GitHub..."
-RELEASE_PAYLOAD=$(cat <<EOF
-{
-  "tag_name": "$TAG_NAME",
-  "name": "Metro Anime $TAG_NAME",
-  "body": "$CHANGELOG",
-  "draft": false,
-  "prerelease": false
-}
-EOF
-)
+RELEASE_PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({'tag_name': sys.argv[1], 'name': f'Metro Anime {sys.argv[1]}', 'body': sys.argv[2], 'draft': False, 'prerelease': False}))" "$TAG_NAME" "$CHANGELOG")
 
 # Проверяем, существует ли уже такой релиз
 EXISTING_ID=$(curl -s -H "Authorization: Bearer $TOKEN" "https://api.github.com/repos/$REPO/releases/tags/$TAG_NAME" | grep -m1 '"id":' | sed -E 's/[^0-9]//g')
