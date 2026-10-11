@@ -13,6 +13,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -29,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -1501,7 +1504,7 @@ fun PlayerScreen(
                             slideOutVertically(animationSpec = tween(150)) { -it / 6 },
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(top = 64.dp, start = 20.dp),
+                        .padding(top = 58.dp, start = 20.dp),
                 ) {
                     Column(
                         modifier = Modifier
@@ -1524,12 +1527,21 @@ fun PlayerScreen(
                                 fontSize = 13.sp,
                                 color = scheme.text,
                             )
+                            val formattedSpeed = if ((baseSpeed * 10).roundToInt() % 10 == 0) {
+                                String.format(java.util.Locale.US, "%.1fx", baseSpeed)
+                            } else {
+                                String.format(java.util.Locale.US, "%.2fx", baseSpeed)
+                            }
                             Text(
-                                text = "${baseSpeed}x",
+                                text = formattedSpeed,
                                 fontFamily = MetroFonts.text,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
                                 color = scheme.accent,
+                                modifier = Modifier.metroClickable {
+                                    baseSpeed = 1.0f
+                                    exoPlayer.setPlaybackSpeed(1.0f)
+                                },
                             )
                         }
 
@@ -1538,53 +1550,18 @@ fun PlayerScreen(
                         Slider(
                             value = baseSpeed,
                             onValueChange = {
-                                val snapped = when {
-                                    it < 0.65f -> 0.5f
-                                    it < 0.88f -> 0.75f
-                                    it < 1.15f -> 1.0f
-                                    it < 1.38f -> 1.25f
-                                    it < 1.65f -> 1.5f
-                                    it < 1.88f -> 1.75f
-                                    else -> 2.0f
-                                }
+                                val raw = (it * 20).roundToInt() / 20f
+                                val snapped = if (raw in 0.95f..1.05f) 1.0f else raw.coerceIn(0.25f, 3.0f)
                                 baseSpeed = snapped
                                 exoPlayer.setPlaybackSpeed(snapped)
                             },
-                            valueRange = 0.5f..2.0f,
-                            steps = 5,
+                            valueRange = 0.25f..3.0f,
                             colors = SliderDefaults.colors(
                                 thumbColor = scheme.accent,
                                 activeTrackColor = scheme.accent,
                                 inactiveTrackColor = Color.White.copy(alpha = 0.15f),
                             ),
                         )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            listOf(0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { spd ->
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(if (baseSpeed == spd) scheme.accent else scheme.glass)
-                                        .metroClickable {
-                                             baseSpeed = spd
-                                             exoPlayer.setPlaybackSpeed(spd)
-                                        }
-                                        .padding(horizontal = 6.dp, vertical = 3.dp),
-                                ) {
-                                    Text(
-                                        text = "${spd}x",
-                                        fontFamily = MetroFonts.text,
-                                        fontSize = 11.sp,
-                                        color = if (baseSpeed == spd) Color.White else scheme.textDim,
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
 
@@ -1601,18 +1578,22 @@ fun PlayerScreen(
                             slideOutVertically(animationSpec = tween(150)) { -it / 6 },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 64.dp, end = 20.dp),
+                        .padding(top = 58.dp, end = 20.dp),
                 ) {
+                    val settingsScrollState = rememberScrollState()
+                    val configuration = LocalConfiguration.current
+                    val maxMenuHeight = (configuration.screenHeightDp.dp - 128.dp).coerceAtLeast(180.dp)
                     Column(
                         modifier = Modifier
-                            .width(260.dp)
+                            .width(280.dp)
+                            .heightIn(max = maxMenuHeight)
                             .clip(RoundedCornerShape(12.dp))
                             .playerHaze(hazeState)
                             .background(hudCardGlass)
                             .border(1.dp, hudBorder, RoundedCornerShape(12.dp))
-                            .padding(14.dp),
-                    )
- {
+                            .verticalScroll(settingsScrollState)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1638,7 +1619,7 @@ fun PlayerScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
                             text = "Качество видео:",
@@ -1646,7 +1627,7 @@ fun PlayerScreen(
                             fontSize = 11.sp,
                             color = scheme.textDim,
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             streams.keys.sortedDescending().forEach { q ->
                                 Box(
@@ -1655,20 +1636,20 @@ fun PlayerScreen(
                                         .background(if (selectedQuality == q) scheme.accent else scheme.glass)
                                         .border(1.dp, if (selectedQuality == q) scheme.accent else scheme.stroke, RoundedCornerShape(6.dp))
                                         .metroClickable { updateQuality(q) }
-                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
                                 ) {
                                     Text(
                                         text = "${q}p",
                                         fontFamily = MetroFonts.headline,
                                         fontWeight = FontWeight.SemiBold,
-                                        fontSize = 12.sp,
+                                        fontSize = 11.sp,
                                         color = if (selectedQuality == q) Color.White else scheme.text,
                                     )
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         // AI Upscale Switch
                         Row(
@@ -1681,7 +1662,7 @@ fun PlayerScreen(
                                     isUpscaleEnabled = !isUpscaleEnabled
                                     upscaleHudVisible = true
                                 }
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
@@ -1713,7 +1694,7 @@ fun PlayerScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         // Player UI Transparency Slider
                         Row(
@@ -1725,7 +1706,7 @@ fun PlayerScreen(
                                 text = "Прозрачность UI:",
                                 fontFamily = MetroFonts.headline,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                                 color = scheme.text,
                             )
                             val transparencyPct = ((1f - playerOpacity) * 100).toInt()
@@ -1733,7 +1714,7 @@ fun PlayerScreen(
                                 text = "$transparencyPct%",
                                 fontFamily = MetroFonts.text,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                                 color = scheme.accent,
                             )
                         }
@@ -1760,8 +1741,9 @@ fun PlayerScreen(
                         ) {
                             Text(
                                 text = "Акриловый блюр",
-                                fontFamily = MetroFonts.text,
-                                fontSize = 12.sp,
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp,
                                 color = scheme.text,
                             )
                             Switch(
@@ -1785,14 +1767,14 @@ fun PlayerScreen(
                                 Text(
                                     text = "Сила блюра",
                                     fontFamily = MetroFonts.text,
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     color = scheme.textDim,
                                 )
                                 Text(
                                     text = "${currentSettings.playerBlurRadius} dp",
                                     fontFamily = MetroFonts.text,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     color = scheme.accent,
                                 )
                             }
@@ -1808,12 +1790,12 @@ fun PlayerScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
                             text = "Источник: ${source.label}",
                             fontFamily = MetroFonts.text,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             color = scheme.textDim,
                         )
                         if (dubbingTitle.isNotBlank()) {
@@ -1821,7 +1803,7 @@ fun PlayerScreen(
                             Text(
                                 text = "Озвучка: $dubbingTitle",
                                 fontFamily = MetroFonts.text,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 color = scheme.textDim,
                                 maxLines = 1,
                             )
