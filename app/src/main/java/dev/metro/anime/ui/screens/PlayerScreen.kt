@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -147,6 +148,9 @@ fun PlayerScreen(
 
     var seekCumulativeSeconds by remember { mutableStateOf(0) }
     var seekIndicatorSide by remember { mutableStateOf(0) } // -1 left, +1 right
+    var lastSeekSec by remember { mutableIntStateOf(10) }
+    var lastSeekSide by remember { mutableIntStateOf(1) }
+    var seekIndicatorVisible by remember { mutableStateOf(false) }
     var seekJob by remember { mutableStateOf<Job?>(null) }
 
     val currentEpisode by rememberUpdatedState(episode)
@@ -197,79 +201,6 @@ fun PlayerScreen(
                     activeEnding = skipPair.second
                 }
             }
-        }
-    }
-
-    fun saveCurrentProgress() {
-        val ep = currentEpisode
-        val pos = currentPositionMs
-        val dur = durationMs
-        if (pos > 3000L && dur > 10000L) {
-            val ed = activeEnding
-            val isNearEndOrEnding = when {
-                ed != null && pos >= (ed.startSec - 10) * 1000L -> true
-                dur > 60_000L && pos >= dur - 45_000L -> true
-                else -> false
-            }
-
-            val nextEp = nextEpisode ?: currentAllEpisodes.find { it.ordinal == ep.ordinal + 1 }
-            if (isNearEndOrEnding && nextEp != null) {
-                repository.saveProgress(
-                    dev.metro.anime.data.model.WatchProgress(
-                        anime = currentAnime,
-                        episodeOrdinal = nextEp.ordinal,
-                        episodeName = nextEp.name,
-                        dubbingTitle = currentDubbingTitle.ifBlank { currentSource.label },
-                        source = currentSource,
-                        positionMs = 0L,
-                        durationMs = 0L,
-                    )
-                )
-            } else {
-                repository.saveProgress(
-                    dev.metro.anime.data.model.WatchProgress(
-                        anime = currentAnime,
-                        episodeOrdinal = ep.ordinal,
-                        episodeName = ep.name,
-                        dubbingTitle = currentDubbingTitle.ifBlank { currentSource.label },
-                        source = currentSource,
-                        positionMs = pos,
-                        durationMs = dur,
-                    )
-                )
-            }
-        }
-    }
-
-    fun switchToEpisode(target: AnimeEpisode) {
-        android.util.Log.d("PlayerScreen", "[switchToEpisode] Switching to episode ${target.ordinal}, name=${target.name}")
-        saveCurrentProgress()
-        // Pre-save target episode immediately so rapid app-kill or navigation doesn't revert to old episode
-        repository.saveProgress(
-            dev.metro.anime.data.model.WatchProgress(
-                anime = currentAnime,
-                episodeOrdinal = target.ordinal,
-                episodeName = target.name,
-                dubbingTitle = currentDubbingTitle.ifBlank { currentSource.label },
-                source = currentSource,
-                positionMs = 0L,
-                durationMs = 0L,
-            )
-        )
-        onNextEpisodeClick?.invoke(target)
-    }
-
-    // Lifecycle observer to guarantee saving progress when app goes to background / closes
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, episode) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
-                saveCurrentProgress()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -417,6 +348,87 @@ fun PlayerScreen(
         }
     }
 
+    fun saveCurrentProgress() {
+        val ep = currentEpisode
+        val livePos = try { exoPlayer.currentPosition.coerceAtLeast(0L) } catch (_: Throwable) { 0L }
+        val liveDur = try { exoPlayer.duration.coerceAtLeast(0L) } catch (_: Throwable) { 0L }
+        val pos = if (livePos > 0L) livePos else currentPositionMs
+        val dur = when {
+            liveDur > 0L -> liveDur
+            durationMs > 0L -> durationMs
+            (ep.durationSec ?: 0) > 0 -> (ep.durationSec!! * 1000L)
+            else -> 0L
+        }
+
+        if (pos > 1000L) {
+            val ed = activeEnding
+            val isNearEndOrEnding = when {
+                ed != null && ed.startSec > 30 && pos >= (ed.startSec - 10) * 1000L -> true
+                dur > 60_000L && pos >= dur - 45_000L -> true
+                else -> false
+            }
+
+            val nextEp = nextEpisode ?: currentAllEpisodes.find { it.ordinal == ep.ordinal + 1 }
+            if (isNearEndOrEnding && nextEp != null) {
+                repository.saveProgress(
+                    dev.metro.anime.data.model.WatchProgress(
+                        anime = currentAnime,
+                        episodeOrdinal = nextEp.ordinal,
+                        episodeName = nextEp.name,
+                        dubbingTitle = currentDubbingTitle.ifBlank { currentSource.label },
+                        source = currentSource,
+                        positionMs = 0L,
+                        durationMs = 0L,
+                    )
+                )
+            } else {
+                repository.saveProgress(
+                    dev.metro.anime.data.model.WatchProgress(
+                        anime = currentAnime,
+                        episodeOrdinal = ep.ordinal,
+                        episodeName = ep.name,
+                        dubbingTitle = currentDubbingTitle.ifBlank { currentSource.label },
+                        source = currentSource,
+                        positionMs = pos,
+                        durationMs = dur,
+                    )
+                )
+            }
+        }
+    }
+
+    fun switchToEpisode(target: AnimeEpisode) {
+        android.util.Log.d("PlayerScreen", "[switchToEpisode] Switching to episode ${target.ordinal}, name=${target.name}")
+        saveCurrentProgress()
+        // Pre-save target episode immediately so rapid app-kill or navigation doesn't revert to old episode
+        repository.saveProgress(
+            dev.metro.anime.data.model.WatchProgress(
+                anime = currentAnime,
+                episodeOrdinal = target.ordinal,
+                episodeName = target.name,
+                dubbingTitle = currentDubbingTitle.ifBlank { currentSource.label },
+                source = currentSource,
+                positionMs = 0L,
+                durationMs = 0L,
+            )
+        )
+        onNextEpisodeClick?.invoke(target)
+    }
+
+    // Lifecycle observer to guarantee saving progress when app goes to background / closes
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, episode) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
+                saveCurrentProgress()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     val currentNextEp by rememberUpdatedState(nextEpisode)
     val currentPrevEp by rememberUpdatedState(prevEpisode)
 
@@ -516,10 +528,15 @@ fun PlayerScreen(
         } else {
             seekCumulativeSeconds += deltaSec
         }
+        lastSeekSec = kotlin.math.abs(seekCumulativeSeconds)
+        lastSeekSide = side
+        seekIndicatorVisible = true
 
         seekJob?.cancel()
         seekJob = coroutineScope.launch {
             delay(850)
+            seekIndicatorVisible = false
+            delay(250)
             seekCumulativeSeconds = 0
             seekIndicatorSide = 0
         }
@@ -758,6 +775,11 @@ fun PlayerScreen(
         }
     }
 
+    BackHandler {
+        saveCurrentProgress()
+        onBackClick()
+    }
+
     // Cleanup on episode switch or player exit
     DisposableEffect(episode) {
         onDispose {
@@ -767,6 +789,7 @@ fun PlayerScreen(
 
     DisposableEffect(Unit) {
         onDispose {
+            saveCurrentProgress()
             exoPlayer.release()
         }
     }
@@ -933,15 +956,21 @@ fun PlayerScreen(
         // =====================================================================
         // HUD: Speed Hold Banner (1.5x / 2.0x)
         // =====================================================================
+        var lastBoostText by remember { mutableStateOf("2.0x") }
+        if (isHoldingLeft) {
+            lastBoostText = "1.5x"
+        } else if (isHoldingRight) {
+            lastBoostText = "2.0x"
+        }
+
         AnimatedVisibility(
             visible = isHoldingLeft || isHoldingRight,
-            enter = fadeIn(animationSpec = tween(150)),
-            exit = fadeOut(animationSpec = tween(200)),
+            enter = fadeIn(animationSpec = tween(150)) + scaleIn(initialScale = 0.85f, animationSpec = tween(150)),
+            exit = fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.85f, animationSpec = tween(200)),
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 28.dp),
         ) {
-            val boost = if (isHoldingLeft) "1.5x" else "2.0x"
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radiusSmall))
@@ -953,14 +982,13 @@ fun PlayerScreen(
                     .border(1.dp, hudBorder, RoundedCornerShape(MetroDimens.radiusSmall))
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
-            )
- {
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Text(
-                        text = "УСКОРЕНИЕ $boost",
+                        text = "УСКОРЕНИЕ $lastBoostText",
                         fontFamily = MetroFonts.headline,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
@@ -985,10 +1013,15 @@ fun PlayerScreen(
                 upscaleHudVisible = false
             }
         }
+        var lastUpscaleEnabled by remember { mutableStateOf(isUpscaleEnabled) }
+        if (upscaleHudVisible) {
+            lastUpscaleEnabled = isUpscaleEnabled
+        }
+
         AnimatedVisibility(
             visible = upscaleHudVisible,
-            enter = fadeIn() + scaleIn(),
-            exit = fadeOut() + scaleOut(),
+            enter = fadeIn(animationSpec = tween(150)) + scaleIn(initialScale = 0.85f, animationSpec = tween(150)),
+            exit = fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.85f, animationSpec = tween(200)),
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = 28.dp),
@@ -1001,7 +1034,7 @@ fun PlayerScreen(
                         blurRadius = 24.dp
                     }
                     .background(hudPillGlass)
-                    .border(1.dp, if (isUpscaleEnabled) scheme.accent else Color.White.copy(alpha = 0.2f), RoundedCornerShape(MetroDimens.radiusSmall))
+                    .border(1.dp, if (lastUpscaleEnabled) scheme.accent else Color.White.copy(alpha = 0.2f), RoundedCornerShape(MetroDimens.radiusSmall))
                     .padding(horizontal = 16.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1012,15 +1045,15 @@ fun PlayerScreen(
                     Icon(
                         imageVector = Icons.Default.AutoFixHigh,
                         contentDescription = null,
-                        tint = if (isUpscaleEnabled) scheme.accent else scheme.textDim,
+                        tint = if (lastUpscaleEnabled) scheme.accent else scheme.textDim,
                         modifier = Modifier.size(16.dp),
                     )
                     Text(
-                        text = if (isUpscaleEnabled) "AI-АПСКЕЙЛ: CAS ВЫСОКИЙ (ВКЛ)" else "AI-АПСКЕЙЛ: ВЫКЛЮЧЕН",
+                        text = if (lastUpscaleEnabled) "AI-АПСКЕЙЛ: CAS ВЫСОКИЙ (ВКЛ)" else "AI-АПСКЕЙЛ: ВЫКЛЮЧЕН",
                         fontFamily = MetroFonts.headline,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
-                        color = if (isUpscaleEnabled) scheme.accent else scheme.textDim,
+                        color = if (lastUpscaleEnabled) scheme.accent else scheme.textDim,
                     )
                 }
             }
@@ -1030,15 +1063,14 @@ fun PlayerScreen(
         // HUD: Seek Indicator (-10s / +10s)
         // =====================================================================
         AnimatedVisibility(
-            visible = seekCumulativeSeconds != 0,
-            enter = fadeIn(animationSpec = tween(150)),
-            exit = fadeOut(animationSpec = tween(200)),
+            visible = seekIndicatorVisible,
+            enter = fadeIn(animationSpec = tween(150)) + scaleIn(initialScale = 0.85f, animationSpec = tween(150)),
+            exit = fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.85f, animationSpec = tween(200)),
             modifier = Modifier.align(
-                if (seekIndicatorSide < 0) Alignment.CenterStart else Alignment.CenterEnd
+                if (lastSeekSide < 0) Alignment.CenterStart else Alignment.CenterEnd
             ).padding(horizontal = 48.dp),
         ) {
-            val displaySec = kotlin.math.abs(seekCumulativeSeconds)
-            val displayText = if (seekIndicatorSide < 0) "-$displaySec сек" else "+$displaySec сек"
+            val displayText = if (lastSeekSide < 0) "-$lastSeekSec сек" else "+$lastSeekSec сек"
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(MetroDimens.radius))
@@ -1055,7 +1087,7 @@ fun PlayerScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    if (seekIndicatorSide < 0) {
+                    if (lastSeekSide < 0) {
                         Icon(
                             imageVector = Icons.Default.FastRewind,
                             contentDescription = null,
@@ -1070,7 +1102,7 @@ fun PlayerScreen(
                         fontSize = 16.sp,
                         color = scheme.text,
                     )
-                    if (seekIndicatorSide > 0) {
+                    if (lastSeekSide > 0) {
                         Icon(
                             imageVector = Icons.Default.FastForward,
                             contentDescription = null,
@@ -1133,20 +1165,33 @@ fun PlayerScreen(
         val isEd = ed != null && curSec in ed.startSec..ed.endSec
 
         val showSkip = isOp || isEd
-        val skipTargetSec = when {
-            isOp -> op?.endSec
-            isEd -> ed?.endSec
+        val currentSkipTargetSec = when {
+            isOp -> op.endSec
+            isEd -> ed.endSec
             else -> null
         }
-        val skipLabel = when {
+        val currentIsEdNext = isEd && nextEpisode != null
+        val currentSkipLabel = when {
             isOp -> "Пропустить опенинг"
-            isEd && nextEpisode != null -> "Следующая серия"
+            currentIsEdNext -> "Следующая серия"
             isEd -> "Пропустить эндинг"
             else -> "Пропустить заставку"
         }
 
+        var lastSkipLabel by remember { mutableStateOf("Пропустить опенинг") }
+        var lastSkipTargetSec by remember { mutableStateOf<Int?>(null) }
+        var lastIsEdNext by remember { mutableStateOf(false) }
+
+        if (showSkip) {
+            lastSkipLabel = currentSkipLabel
+            lastSkipTargetSec = currentSkipTargetSec
+            lastIsEdNext = currentIsEdNext
+        }
+
         AnimatedVisibility(
-            visible = showSkip && (skipTargetSec != null || (isEd && nextEpisode != null)) && !isControlsLocked,
+            visible = showSkip && (currentSkipTargetSec != null || currentIsEdNext) && !isControlsLocked,
+            enter = fadeIn(animationSpec = tween(200)) + scaleIn(initialScale = 0.85f, animationSpec = tween(200)),
+            exit = fadeOut(animationSpec = tween(250)) + scaleOut(targetScale = 0.85f, animationSpec = tween(250)),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(bottom = 76.dp, end = 24.dp),
@@ -1161,17 +1206,17 @@ fun PlayerScreen(
                     .background(hudPillGlass)
                     .border(1.dp, scheme.accent, RoundedCornerShape(MetroDimens.radiusSmall))
                     .metroClickable {
-                        if (isEd && nextEpisode != null) {
+                        if (lastIsEdNext && nextEpisode != null) {
                             switchToEpisode(nextEpisode)
-                        } else if (skipTargetSec != null) {
-                            exoPlayer.seekTo(skipTargetSec * 1000L)
+                        } else if (lastSkipTargetSec != null) {
+                            exoPlayer.seekTo(lastSkipTargetSec!! * 1000L)
                         }
                     }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = skipLabel,
+                        text = lastSkipLabel,
                         fontFamily = MetroFonts.headline,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1191,11 +1236,16 @@ fun PlayerScreen(
         // =====================================================================
         // Lock Screen Unlock Button (When controls are locked)
         // =====================================================================
-        if (isControlsLocked) {
+        AnimatedVisibility(
+            visible = isControlsLocked,
+            enter = fadeIn(animationSpec = tween(150)) + scaleIn(initialScale = 0.85f, animationSpec = tween(150)),
+            exit = fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.85f, animationSpec = tween(200)),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 18.dp, end = 20.dp),
+        ) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 18.dp, end = 20.dp)
                     .size(44.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .hazeEffect(state = hazeState) {
@@ -1206,8 +1256,7 @@ fun PlayerScreen(
                     .border(1.dp, scheme.accent, RoundedCornerShape(10.dp))
                     .metroClickable { isControlsLocked = false },
                 contentAlignment = Alignment.Center,
-            )
- {
+            ) {
                 Icon(
                     imageVector = Icons.Default.Lock,
                     contentDescription = "Разблокировать",
@@ -1262,7 +1311,10 @@ fun PlayerScreen(
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(onClick = onBackClick) {
+                        IconButton(onClick = {
+                            saveCurrentProgress()
+                            onBackClick()
+                        }) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Назад",
@@ -1436,8 +1488,12 @@ fun PlayerScreen(
                 // -------------------------------------------------------------
                 AnimatedVisibility(
                     visible = showSpeedDialog,
-                    enter = fadeIn() + slideInVertically(),
-                    exit = fadeOut() + slideOutVertically(),
+                    enter = fadeIn(animationSpec = tween(180)) +
+                            scaleIn(initialScale = 0.90f, animationSpec = tween(180)) +
+                            slideInVertically(animationSpec = tween(180)) { -it / 6 },
+                    exit = fadeOut(animationSpec = tween(150)) +
+                            scaleOut(targetScale = 0.90f, animationSpec = tween(150)) +
+                            slideOutVertically(animationSpec = tween(150)) { -it / 6 },
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(top = 64.dp, start = 20.dp),
@@ -1535,8 +1591,12 @@ fun PlayerScreen(
                 // -------------------------------------------------------------
                 AnimatedVisibility(
                     visible = showSettingsDialog,
-                    enter = fadeIn() + slideInVertically(),
-                    exit = fadeOut() + slideOutVertically(),
+                    enter = fadeIn(animationSpec = tween(180)) +
+                            scaleIn(initialScale = 0.90f, animationSpec = tween(180)) +
+                            slideInVertically(animationSpec = tween(180)) { -it / 6 },
+                    exit = fadeOut(animationSpec = tween(150)) +
+                            scaleOut(targetScale = 0.90f, animationSpec = tween(150)) +
+                            slideOutVertically(animationSpec = tween(150)) { -it / 6 },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(top = 64.dp, end = 20.dp),

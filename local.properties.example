@@ -1,0 +1,5 @@
+## Android SDK location (adjust for your device or PC)
+## Termux proot: sdk.dir=/root/android-sdk
+## Linux/Mac: sdk.dir=/home/username/Android/Sdk
+## Windows: sdk.dir=C\:\\Users\\username\\AppData\\Local\\Android\\Sdk
+sdk.dir=/root/android-sdk
