@@ -507,6 +507,62 @@ fun SettingsScreen(
             }
 
             // =================================================================
+            // Interface & Navigation Section
+            // =================================================================
+            item {
+                Text(
+                    text = "ИНТЕРФЕЙС И НАВИГАЦИЯ",
+                    fontFamily = MetroFonts.headline,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.2.sp,
+                    color = scheme.textDim,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                FrostedGlassBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MetroDimens.radius,
+                    tint = scheme.glass,
+                    borderColor = scheme.strokeStrong,
+                    borderWidth = 1.dp,
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Шапка Windows Phone (Pivot)",
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 14.sp,
+                                    color = scheme.text,
+                                )
+                                Text(
+                                    text = "Панорамные крупные заголовки и свайп вкладок вместо кнопок-чипов",
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 11.sp,
+                                    color = scheme.textDim,
+                                )
+                            }
+                            Switch(
+                                checked = settings.usePivotHeader,
+                                onCheckedChange = { settingsRepo.setUsePivotHeader(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = scheme.accent,
+                                    checkedTrackColor = scheme.glassHover,
+                                    uncheckedThumbColor = scheme.textDim,
+                                    uncheckedTrackColor = scheme.glass,
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+
+            // =================================================================
             // Wallpaper Extracted Palette Section
             // =================================================================
             if (settings.hasCustomWallpaper && settings.wallpaperPalette.isNotEmpty()) {

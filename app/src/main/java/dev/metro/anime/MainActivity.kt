@@ -195,6 +195,7 @@ class MainActivity : ComponentActivity() {
                             is Screen.Home -> {
                                 HomeScreen(
                                     repository = repository,
+                                    usePivotHeader = settings.usePivotHeader,
                                     onAnimeClick = { anime ->
                                         currentScreen = Screen.Details(anime)
                                     },

@@ -56,6 +56,7 @@ data class AnimeSettings(
     val playerControlsOpacity: Float = 0.38f,
     val playerBlurEnabled: Boolean = true,
     val playerBlurRadius: Int = 24,
+    val usePivotHeader: Boolean = true,
 )
 
 data class WallpaperBitmapHolder(
@@ -80,6 +81,7 @@ class MetroSettingsRepository(private val context: Context) {
         private val KEY_PLAYER_OPACITY = floatPreferencesKey("player_controls_opacity")
         private val KEY_PLAYER_BLUR_ENABLED = booleanPreferencesKey("player_blur_enabled")
         private val KEY_PLAYER_BLUR_RADIUS = intPreferencesKey("player_blur_radius")
+        private val KEY_USE_PIVOT_HEADER = booleanPreferencesKey("use_pivot_header")
 
         val ACCENT_PRESETS = listOf(
             MetroAccentOption("Бирюзовый", 0xFF00ABA9.toInt()),
@@ -117,6 +119,7 @@ class MetroSettingsRepository(private val context: Context) {
             playerControlsOpacity = prefs[KEY_PLAYER_OPACITY] ?: 0.38f,
             playerBlurEnabled = prefs[KEY_PLAYER_BLUR_ENABLED] ?: true,
             playerBlurRadius = prefs[KEY_PLAYER_BLUR_RADIUS] ?: 24,
+            usePivotHeader = prefs[KEY_USE_PIVOT_HEADER] ?: true,
         )
     }
 
@@ -202,6 +205,14 @@ class MetroSettingsRepository(private val context: Context) {
         }
     }
 
+    fun setUsePivotHeader(enabled: Boolean) {
+        scope.launch {
+            app.animeSettingsStore.edit { prefs ->
+                prefs[KEY_USE_PIVOT_HEADER] = enabled
+            }
+        }
+    }
+
     fun setAutoUpdateInterval(minutes: Int) {
         val valid = minutes.coerceAtLeast(0)
         scope.launch {
@@ -263,6 +274,7 @@ class MetroSettingsRepository(private val context: Context) {
             prefs[KEY_PLAYER_OPACITY] = newSettings.playerControlsOpacity
             prefs[KEY_PLAYER_BLUR_ENABLED] = newSettings.playerBlurEnabled
             prefs[KEY_PLAYER_BLUR_RADIUS] = newSettings.playerBlurRadius
+            prefs[KEY_USE_PIVOT_HEADER] = newSettings.usePivotHeader
         }
     }
 
