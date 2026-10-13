@@ -102,7 +102,7 @@ fun PlayerScreen(
     val currentSettings by settingsRepo.settings.collectAsState()
     val playerOpacity = currentSettings.playerControlsOpacity
     val hudPillGlass = Color(0xFF101016).copy(alpha = playerOpacity)
-    val hudCardGlass = hudPillGlass
+    val hudCardGlass = Color(0xFF14141E).copy(alpha = (playerOpacity + 0.45f).coerceIn(0.85f, 0.96f))
     val hudBorder = Color.White.copy(alpha = (playerOpacity * 0.10f).coerceIn(0.03f, 0.08f))
 
     val hazeState = remember { HazeState() }
@@ -1497,7 +1497,7 @@ fun PlayerScreen(
                             slideOutVertically(animationSpec = tween(150)) { -it / 6 },
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(top = 58.dp, start = 20.dp),
+                        .padding(top = 70.dp, start = 20.dp),
                 ) {
                     Column(
                         modifier = Modifier
@@ -1571,11 +1571,11 @@ fun PlayerScreen(
                             slideOutVertically(animationSpec = tween(150)) { -it / 6 },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 58.dp, end = 20.dp),
+                        .padding(top = 70.dp, end = 20.dp),
                 ) {
                     val settingsScrollState = rememberScrollState()
                     val configuration = LocalConfiguration.current
-                    val maxMenuHeight = (configuration.screenHeightDp.dp - 128.dp).coerceAtLeast(180.dp)
+                    val maxMenuHeight = (configuration.screenHeightDp.dp - 150.dp).coerceAtLeast(160.dp)
                     Column(
                         modifier = Modifier
                             .width(280.dp)

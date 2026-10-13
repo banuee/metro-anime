@@ -314,13 +314,13 @@ class AnimeRepository(context: Context) {
     }
 
     fun saveProgress(progress: WatchProgress) {
-        val cleanProgress = progress.sanitized()
+        val cleanProgress = progress.sanitized().copy(updatedAt = System.currentTimeMillis())
         val current = _history.value.toMutableList()
         current.removeAll { it.anime.id == cleanProgress.anime.id }
         current.add(0, cleanProgress)
         // Keep up to 50 items
         val trimmed = if (current.size > 50) current.take(50) else current
-        _history.value = trimmed
+        _history.value = trimmed.toList()
         prefs.edit().putString("watch_history", gson.toJson(trimmed)).apply()
     }
 

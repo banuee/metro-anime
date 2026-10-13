@@ -237,112 +237,6 @@ fun DetailsScreen(
                     }
                 }
 
-                // Continue Watching Hero Button (if previously watched)
-                if (watchProgress != null) {
-                    item {
-                        val currentTargetIndex = episodes.indexOfFirst { it.ordinal == watchProgress.episodeOrdinal }
-                        val currentTargetEp = if (currentTargetIndex >= 0) episodes[currentTargetIndex] else null
-                        val isNearEnd = currentTargetEp != null && (
-                            (currentTargetEp.ending != null && watchProgress.positionMs >= (currentTargetEp.ending.startSec - 10) * 1000L) ||
-                            (watchProgress.durationMs > 60_000L && watchProgress.positionMs >= watchProgress.durationMs - 45_000L)
-                        )
-                        val nextEp = if (currentTargetIndex >= 0) {
-                            episodes.getOrNull(currentTargetIndex + 1)
-                        } else {
-                            episodes.find { it.ordinal == watchProgress.episodeOrdinal + 1 }
-                        }
-                        val (targetEp, targetPositionMs, isNewEpisode) = when {
-                            isNearEnd && nextEp != null -> Triple(nextEp, 0L, true)
-                            watchProgress.positionMs == 0L -> Triple(currentTargetEp ?: episodes.firstOrNull(), 0L, true)
-                            currentTargetEp != null -> Triple(currentTargetEp, watchProgress.positionMs, false)
-                            else -> Triple(episodes.firstOrNull(), 0L, true)
-                        }
-
-                        // Ensure we use a dubbing group that contains the target episode
-                        val effectiveDub = if (targetEp != null && activeDub?.episodes?.any { it.ordinal == targetEp.ordinal } == true) {
-                            activeDub
-                        } else {
-                            loadedDetails?.dubbings?.firstOrNull { dub -> dub.episodes.any { it.ordinal == targetEp?.ordinal } } ?: activeDub
-                        }
-                        val effectiveEpisodes = effectiveDub?.episodes.orEmpty()
-
-                        FrostedGlassBox(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp)
-                                .metroClickable {
-                                    if (targetEp != null && effectiveDub != null) {
-                                        onPlayEpisode(
-                                            targetEp,
-                                            effectiveDub.source,
-                                            anime.sanitized(),
-                                            effectiveDub.title,
-                                            targetPositionMs,
-                                            effectiveEpisodes,
-                                        )
-                                    }
-                                },
-                            shape = MetroDimens.radiusSmall,
-                            tint = Color.White.copy(alpha = 0.05f),
-                            borderColor = scheme.accent.copy(alpha = 0.35f),
-                            borderWidth = 1.dp,
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(42.dp)
-                                        .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                                        .background(scheme.accent.copy(alpha = 0.16f))
-                                        .border(1.dp, scheme.accent.copy(alpha = 0.55f), RoundedCornerShape(MetroDimens.radiusSmall)),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = "Продолжить просмотр",
-                                        tint = scheme.accent,
-                                        modifier = Modifier.size(24.dp),
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "ПРОДОЛЖИТЬ ПРОСМОТР",
-                                        fontFamily = MetroFonts.headline,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp,
-                                        letterSpacing = 1.2.sp,
-                                        color = scheme.accent,
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    val displayOrdinal = targetEp?.ordinal ?: watchProgress.episodeOrdinal
-                                    val subtitle = if (isNewEpisode) {
-                                        "Серия $displayOrdinal • Новая серия"
-                                    } else {
-                                        "Серия $displayOrdinal • ${formatMinSec(targetPositionMs)} / ${formatMinSec(watchProgress.durationMs)}"
-                                    }
-                                    Text(
-                                        text = subtitle,
-                                        fontFamily = MetroFonts.headline,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 13.sp,
-                                        color = scheme.text,
-                                    )
-                                    Text(
-                                        text = "Озвучка: ${effectiveDub?.title ?: watchProgress.dubbingTitle}",
-                                        fontFamily = MetroFonts.text,
-                                        fontSize = 11.sp,
-                                        color = scheme.textDim,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
 
                 // Genres
                 val displayGenres = loadedDetails?.title?.safeGenres?.ifEmpty { null } ?: anime.safeGenres
@@ -454,8 +348,115 @@ fun DetailsScreen(
                     if (start < sortedEpisodes.size) sortedEpisodes.subList(start, end) else sortedEpisodes
                 }
 
+                // Continue Watching Card (near episodes)
+                if (watchProgress != null) {
+                    item {
+                        val currentTargetIndex = episodes.indexOfFirst { it.ordinal == watchProgress.episodeOrdinal }
+                        val currentTargetEp = if (currentTargetIndex >= 0) episodes[currentTargetIndex] else null
+                        val isNearEnd = currentTargetEp != null && (
+                            (currentTargetEp.ending != null && watchProgress.positionMs >= (currentTargetEp.ending.startSec - 10) * 1000L) ||
+                            (watchProgress.durationMs > 60_000L && watchProgress.positionMs >= watchProgress.durationMs - 45_000L)
+                        )
+                        val nextEp = if (currentTargetIndex >= 0) {
+                            episodes.getOrNull(currentTargetIndex + 1)
+                        } else {
+                            episodes.find { it.ordinal == watchProgress.episodeOrdinal + 1 }
+                        }
+                        val (targetEp, targetPositionMs, isNewEpisode) = when {
+                            isNearEnd && nextEp != null -> Triple(nextEp, 0L, true)
+                            watchProgress.positionMs == 0L -> Triple(currentTargetEp ?: episodes.firstOrNull(), 0L, true)
+                            currentTargetEp != null -> Triple(currentTargetEp, watchProgress.positionMs, false)
+                            else -> Triple(episodes.firstOrNull(), 0L, true)
+                        }
+
+                        // Ensure we use a dubbing group that contains the target episode
+                        val effectiveDub = if (targetEp != null && activeDub?.episodes?.any { it.ordinal == targetEp.ordinal } == true) {
+                            activeDub
+                        } else {
+                            loadedDetails?.dubbings?.firstOrNull { dub -> dub.episodes.any { it.ordinal == targetEp?.ordinal } } ?: activeDub
+                        }
+                        val effectiveEpisodes = effectiveDub?.episodes.orEmpty()
+
+                        FrostedGlassBox(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .metroClickable {
+                                    if (targetEp != null && effectiveDub != null) {
+                                        onPlayEpisode(
+                                            targetEp,
+                                            effectiveDub.source,
+                                            anime.sanitized(),
+                                            effectiveDub.title,
+                                            targetPositionMs,
+                                            effectiveEpisodes,
+                                        )
+                                    }
+                                },
+                            shape = MetroDimens.radiusSmall,
+                            tint = Color.White.copy(alpha = 0.05f),
+                            borderColor = scheme.accent.copy(alpha = 0.35f),
+                            borderWidth = 1.dp,
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                                        .background(scheme.accent.copy(alpha = 0.16f))
+                                        .border(1.dp, scheme.accent.copy(alpha = 0.55f), RoundedCornerShape(MetroDimens.radiusSmall)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Продолжить просмотр",
+                                        tint = scheme.accent,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "ПРОДОЛЖИТЬ ПРОСМОТР",
+                                        fontFamily = MetroFonts.headline,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        letterSpacing = 1.2.sp,
+                                        color = scheme.accent,
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    val displayOrdinal = targetEp?.ordinal ?: watchProgress.episodeOrdinal
+                                    val subtitle = if (isNewEpisode) {
+                                        "Серия $displayOrdinal • Новая серия"
+                                    } else {
+                                        "Серия $displayOrdinal • ${formatMinSec(targetPositionMs)} / ${formatMinSec(watchProgress.durationMs)}"
+                                    }
+                                    Text(
+                                        text = subtitle,
+                                        fontFamily = MetroFonts.headline,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp,
+                                        color = scheme.text,
+                                    )
+                                    Text(
+                                        text = "Озвучка: ${effectiveDub?.title ?: watchProgress.dubbingTitle}",
+                                        fontFamily = MetroFonts.text,
+                                        fontSize = 11.sp,
+                                        color = scheme.textDim,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 item {
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()

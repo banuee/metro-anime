@@ -33,7 +33,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import kotlin.math.roundToInt
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -509,61 +511,7 @@ fun SettingsScreen(
                 }
             }
 
-            // =================================================================
-            // Interface & Navigation Section
-            // =================================================================
-            item {
-                Text(
-                    text = "ИНТЕРФЕЙС И НАВИГАЦИЯ",
-                    fontFamily = MetroFonts.headline,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp,
-                    letterSpacing = 1.2.sp,
-                    color = scheme.textDim,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
 
-                FrostedGlassBox(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MetroDimens.radius,
-                    tint = scheme.glass,
-                    borderColor = scheme.strokeStrong,
-                    borderWidth = 1.dp,
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Шапка Windows Phone (Pivot)",
-                                    fontFamily = MetroFonts.text,
-                                    fontSize = 14.sp,
-                                    color = scheme.text,
-                                )
-                                Text(
-                                    text = "Панорамные крупные заголовки и свайп вкладок вместо кнопок-чипов",
-                                    fontFamily = MetroFonts.text,
-                                    fontSize = 11.sp,
-                                    color = scheme.textDim,
-                                )
-                            }
-                            Switch(
-                                checked = settings.usePivotHeader,
-                                onCheckedChange = { settingsRepo.setUsePivotHeader(it) },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = scheme.accent,
-                                    checkedTrackColor = scheme.glassHover,
-                                    uncheckedThumbColor = scheme.textDim,
-                                    uncheckedTrackColor = scheme.glass,
-                                ),
-                            )
-                        }
-                    }
-                }
-            }
 
             // =================================================================
             // Wallpaper Extracted Palette Section
@@ -646,11 +594,11 @@ fun SettingsScreen(
             }
 
             // =================================================================
-            // Preset Accent Color Section
+            // Custom Accent Color Picker Section
             // =================================================================
             item {
                 Text(
-                    text = "ПРЕДУСТАНОВЛЕННЫЕ METRO АКЦЕНТЫ",
+                    text = "ЦВЕТ АКЦЕНТА",
                     fontFamily = MetroFonts.headline,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 12.sp,
@@ -659,139 +607,317 @@ fun SettingsScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(MetroDimens.radius))
-                        .background(scheme.glass)
-                        .border(1.dp, scheme.stroke, RoundedCornerShape(MetroDimens.radius))
-                        .padding(14.dp),
-                ) {
-                    val presets = MetroSettingsRepository.ACCENT_PRESETS
-                    // Render in rows of 4
-                    val chunked = presets.chunked(4)
-                    chunked.forEachIndexed { rowIndex, rowItems ->
-                        if (rowIndex > 0) Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            rowItems.forEach { option ->
-                                val isSelected = settings.accentColor == option.colorInt
-                                val swatchColor = Color(option.colorInt)
-                                val borderW by animateDpAsState(
-                                    targetValue = if (isSelected) 2.5.dp else 1.dp,
-                                    label = "swatch_bw",
-                                )
-                                val borderColor by animateColorAsState(
-                                    targetValue = if (isSelected) Color.White else Color.White.copy(alpha = 0.25f),
-                                    label = "swatch_bc",
-                                )
-
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.width(68.dp),
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(50.dp)
-                                            .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                                            .background(swatchColor)
-                                            .border(borderW, borderColor, RoundedCornerShape(MetroDimens.radiusSmall))
-                                            .metroClickable {
-                                                settingsRepo.setAccentColor(option.colorInt)
-                                            },
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = "Выбран",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(24.dp),
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = option.name,
-                                        fontFamily = MetroFonts.text,
-                                        fontSize = 10.sp,
-                                        color = if (isSelected) scheme.accent else scheme.textDim,
-                                        maxLines = 1,
-                                    )
-                                }
-                            }
-                        }
+                val hsv = remember(settings.accentColor) {
+                    FloatArray(3).apply {
+                        android.graphics.Color.colorToHSV(settings.accentColor, this)
                     }
                 }
-            }
+                var currentHue by remember(settings.accentColor) { mutableFloatStateOf(hsv[0]) }
+                var currentSat by remember(settings.accentColor) { mutableFloatStateOf(hsv[1].coerceIn(0.05f, 1f)) }
+                var currentVal by remember(settings.accentColor) { mutableFloatStateOf(hsv[2].coerceIn(0.20f, 1f)) }
 
-            // =================================================================
-            // Style Preview Tile
-            // =================================================================
-            item {
-                Text(
-                    text = "ПРЕДПРОСМОТР СТИЛЯ",
-                    fontFamily = MetroFonts.headline,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp,
-                    letterSpacing = 1.2.sp,
-                    color = scheme.textDim,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                val rainbowBrush = remember {
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color.Red,
+                            Color.Yellow,
+                            Color.Green,
+                            Color.Cyan,
+                            Color.Blue,
+                            Color.Magenta,
+                            Color.Red,
+                        )
+                    )
+                }
+
+                val satBrush = remember(currentHue) {
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color.White,
+                            Color(android.graphics.Color.HSVToColor(floatArrayOf(currentHue, 1f, 1f))),
+                        )
+                    )
+                }
+
+                val valBrush = remember(currentHue, currentSat) {
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color.Black,
+                            Color(android.graphics.Color.HSVToColor(floatArrayOf(currentHue, currentSat, 1f))),
+                        )
+                    )
+                }
 
                 FrostedGlassBox(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MetroDimens.radius,
-                    tint = scheme.glassHover,
-                    borderColor = scheme.accent.copy(alpha = 0.50f),
+                    tint = scheme.glass,
+                    borderColor = scheme.strokeStrong,
                     borderWidth = 1.dp,
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                                .background(scheme.accent.copy(alpha = 0.85f)),
-                            contentAlignment = Alignment.Center,
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        // Current Color Header & Reset
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            if (settings.serostMode) {
-                                Image(
-                                    painter = painterResource(dev.metro.anime.R.drawable.serost_cat),
-                                    contentDescription = "Серость",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize(),
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                                        .background(Color(settings.accentColor))
+                                        .border(1.5.dp, Color.White.copy(alpha = 0.45f), RoundedCornerShape(MetroDimens.radiusSmall)),
                                 )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(22.dp),
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "Выбранный оттенок",
+                                        fontFamily = MetroFonts.headline,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp,
+                                        color = scheme.text,
+                                    )
+                                    val hexString = String.format(Locale.US, "#%06X", (0xFFFFFF and settings.accentColor))
+                                    Text(
+                                        text = hexString,
+                                        fontFamily = MetroFonts.text,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = scheme.accent,
+                                    )
+                                }
+                            }
+
+                            // Quick Reset to Metro Teal
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(scheme.glassHover)
+                                    .border(1.dp, scheme.stroke, RoundedCornerShape(6.dp))
+                                    .metroClickable {
+                                        settingsRepo.setAccentColor(0xFF00ABA9.toInt())
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                            ) {
+                                Text(
+                                    text = "По умолчанию",
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 11.sp,
+                                    color = scheme.textDim,
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Hue Slider
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
                             Text(
-                                text = if (settings.serostMode) "Плитка в стиле Серости" else "Плитка в стиле Metro",
-                                fontFamily = MetroFonts.headline,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp,
+                                text = "Оттенок (Hue)",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 12.sp,
                                 color = scheme.text,
                             )
                             Text(
-                                text = if (settings.serostMode) "Самый серый и пушистый режим 🐱" else "Акцент, полупрозрачный акрил и шрифт Segoe UI",
+                                text = "${currentHue.roundToInt()}°",
                                 fontFamily = MetroFonts.text,
+                                fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp,
                                 color = scheme.accent,
                             )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(36.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(rainbowBrush),
+                            )
+                            Slider(
+                                value = currentHue,
+                                onValueChange = { newHue ->
+                                    currentHue = newHue
+                                    val newColor = android.graphics.Color.HSVToColor(floatArrayOf(currentHue, currentSat, currentVal))
+                                    settingsRepo.setAccentColor(newColor)
+                                },
+                                valueRange = 0f..360f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.White,
+                                    activeTrackColor = Color.Transparent,
+                                    inactiveTrackColor = Color.Transparent,
+                                ),
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Saturation Slider
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = "Насыщенность (Saturation)",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 12.sp,
+                                color = scheme.text,
+                            )
+                            Text(
+                                text = "${(currentSat * 100).roundToInt()}%",
+                                fontFamily = MetroFonts.text,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = scheme.accent,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(36.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(satBrush),
+                            )
+                            Slider(
+                                value = currentSat,
+                                onValueChange = { newSat ->
+                                    currentSat = newSat
+                                    val newColor = android.graphics.Color.HSVToColor(floatArrayOf(currentHue, currentSat, currentVal))
+                                    settingsRepo.setAccentColor(newColor)
+                                },
+                                valueRange = 0.05f..1f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.White,
+                                    activeTrackColor = Color.Transparent,
+                                    inactiveTrackColor = Color.Transparent,
+                                ),
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Brightness Slider
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = "Яркость (Brightness)",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 12.sp,
+                                color = scheme.text,
+                            )
+                            Text(
+                                text = "${(currentVal * 100).roundToInt()}%",
+                                fontFamily = MetroFonts.text,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = scheme.accent,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(36.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(10.dp)
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(valBrush),
+                            )
+                            Slider(
+                                value = currentVal,
+                                onValueChange = { newVal ->
+                                    currentVal = newVal
+                                    val newColor = android.graphics.Color.HSVToColor(floatArrayOf(currentHue, currentSat, currentVal))
+                                    settingsRepo.setAccentColor(newColor)
+                                },
+                                valueRange = 0.20f..1f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.White,
+                                    activeTrackColor = Color.Transparent,
+                                    inactiveTrackColor = Color.Transparent,
+                                ),
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Quick Metro Swatches
+                        Text(
+                            text = "Быстрые оттенки Metro:",
+                            fontFamily = MetroFonts.text,
+                            fontSize = 11.sp,
+                            color = scheme.textDim,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val quickPresets = remember {
+                            listOf(
+                                0xFF00ABA9.toInt(), // Teal
+                                0xFF1BA1E2.toInt(), // Sky
+                                0xFF0050EF.toInt(), // Cobalt
+                                0xFF6A00FF.toInt(), // Indigo
+                                0xFFAA00FF.toInt(), // Violet
+                                0xFFD80073.toInt(), // Magenta
+                                0xFFE51400.toInt(), // Crimson
+                                0xFFFA6800.toInt(), // Orange
+                                0xFF339933.toInt(), // Emerald
+                                0xFF647687.toInt(), // Steel
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            quickPresets.forEach { colorInt ->
+                                val isSelected = settings.accentColor == colorInt
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(colorInt))
+                                        .border(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.25f),
+                                            shape = CircleShape,
+                                        )
+                                        .metroClickable {
+                                            settingsRepo.setAccentColor(colorInt)
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (isSelected) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White),
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

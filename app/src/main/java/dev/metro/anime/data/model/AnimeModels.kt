@@ -78,18 +78,6 @@ data class WatchProgress(
 ) {
     val safeSource: AnimeSource
         get() = source ?: anime.safeSource
-
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is WatchProgress) return false
-        return anime.id == other.anime.id && episodeOrdinal == other.episodeOrdinal
-    }
-
-    override fun hashCode(): Int {
-        var result = anime.id.hashCode()
-        result = 31 * result + episodeOrdinal
-        return result
-    }
 }
 
 fun AnimeTitle.sanitized(): AnimeTitle = copy(

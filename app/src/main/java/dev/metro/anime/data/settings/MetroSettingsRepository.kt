@@ -256,25 +256,33 @@ class MetroSettingsRepository(private val context: Context) {
         return newState
     }
 
-    suspend fun restoreSettings(newSettings: AnimeSettings) {
+    suspend fun restoreSettings(raw: AnimeSettings) {
+        val sanitized = raw.copy(
+            accentColor = if (raw.accentColor != 0) raw.accentColor else 0xFF00ABA9.toInt(),
+            blurRadius = if (raw.blurRadius in 1..50) raw.blurRadius else 14,
+            backgroundDim = if (raw.backgroundDim in 0.05f..0.95f) raw.backgroundDim else 0.55f,
+            playerControlsOpacity = if (raw.playerControlsOpacity in 0.15f..0.85f) raw.playerControlsOpacity else 0.38f,
+            playerBlurRadius = if (raw.playerBlurRadius in 4..48) raw.playerBlurRadius else 24,
+            usePivotHeader = true,
+        )
         app.animeSettingsStore.edit { prefs ->
-            prefs[KEY_ACCENT] = newSettings.accentColor
-            prefs[KEY_BLUR_ENABLED] = newSettings.blurEnabled
-            prefs[KEY_BLUR_RADIUS] = newSettings.blurRadius
-            prefs[KEY_BG_DIM] = newSettings.backgroundDim
-            prefs[KEY_HAS_WALLPAPER] = newSettings.hasCustomWallpaper
-            if (newSettings.wallpaperPalette.isNotEmpty()) {
-                prefs[KEY_WALLPAPER_PALETTE] = newSettings.wallpaperPalette.joinToString(",") { it.toString() }
+            prefs[KEY_ACCENT] = sanitized.accentColor
+            prefs[KEY_BLUR_ENABLED] = sanitized.blurEnabled
+            prefs[KEY_BLUR_RADIUS] = sanitized.blurRadius
+            prefs[KEY_BG_DIM] = sanitized.backgroundDim
+            prefs[KEY_HAS_WALLPAPER] = sanitized.hasCustomWallpaper
+            if (sanitized.wallpaperPalette.isNotEmpty()) {
+                prefs[KEY_WALLPAPER_PALETTE] = sanitized.wallpaperPalette.joinToString(",") { it.toString() }
             } else {
                 prefs.remove(KEY_WALLPAPER_PALETTE)
             }
-            prefs[KEY_AUTO_UPDATE_INTERVAL] = newSettings.autoUpdateIntervalMinutes
-            prefs[KEY_LAST_NOTIFIED_VERSION] = newSettings.lastNotifiedVersion
-            prefs[KEY_SEROST_MODE] = newSettings.serostMode
-            prefs[KEY_PLAYER_OPACITY] = newSettings.playerControlsOpacity
-            prefs[KEY_PLAYER_BLUR_ENABLED] = newSettings.playerBlurEnabled
-            prefs[KEY_PLAYER_BLUR_RADIUS] = newSettings.playerBlurRadius
-            prefs[KEY_USE_PIVOT_HEADER] = newSettings.usePivotHeader
+            prefs[KEY_AUTO_UPDATE_INTERVAL] = sanitized.autoUpdateIntervalMinutes
+            prefs[KEY_LAST_NOTIFIED_VERSION] = sanitized.lastNotifiedVersion
+            prefs[KEY_SEROST_MODE] = sanitized.serostMode
+            prefs[KEY_PLAYER_OPACITY] = sanitized.playerControlsOpacity
+            prefs[KEY_PLAYER_BLUR_ENABLED] = sanitized.playerBlurEnabled
+            prefs[KEY_PLAYER_BLUR_RADIUS] = sanitized.playerBlurRadius
+            prefs[KEY_USE_PIVOT_HEADER] = true
         }
     }
 
