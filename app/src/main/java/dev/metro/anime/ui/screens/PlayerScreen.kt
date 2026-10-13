@@ -102,7 +102,7 @@ fun PlayerScreen(
     val currentSettings by settingsRepo.settings.collectAsState()
     val playerOpacity = currentSettings.playerControlsOpacity
     val hudPillGlass = Color(0xFF101016).copy(alpha = playerOpacity)
-    val hudCardGlass = Color(0xFF14141E).copy(alpha = (playerOpacity + 0.45f).coerceIn(0.85f, 0.96f))
+    val hudCardGlass = hudPillGlass
     val hudBorder = Color.White.copy(alpha = (playerOpacity * 0.10f).coerceIn(0.03f, 0.08f))
 
     val hazeState = remember { HazeState() }
@@ -999,7 +999,14 @@ fun PlayerScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Text(
-                        text = "УСКОРЕНИЕ $lastBoostText",
+                        text = "УСКОРЕНИЕ",
+                        fontFamily = MetroFonts.headline,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = Color.White,
+                    )
+                    Text(
+                        text = lastBoostText,
                         fontFamily = MetroFonts.headline,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
