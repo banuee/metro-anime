@@ -95,7 +95,7 @@ fun DetailsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0A0A0D).copy(alpha = 0.85f))
+            .background(scheme.background)
             .statusBarsPadding()
             .navigationBarsPadding(),
     ) {
@@ -146,124 +146,91 @@ fun DetailsScreen(
                     val displaySeason = loadedDetails?.title?.season ?: anime.season
                     val displayType = loadedDetails?.title?.type ?: anime.type
 
-                    Box(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(290.dp),
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // Ambient blurred backdrop (glow aura based on the anime poster)
-                        AsyncImage(
-                            model = detailsPosterData,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .metroBlurEffect(radiusPx = 54f, saturationBoost = 1.35f),
-                        )
-
-                        // Deep ambient atmospheric gradient
+                        // Single crisp poster thumbnail on clean acrylic
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Black.copy(alpha = 0.40f),
-                                            Color(0xFF0A0A0D).copy(alpha = 0.70f),
-                                            Color(0xFF0A0A0D).copy(alpha = 0.98f),
-                                        ),
-                                    )
-                                )
-                        )
-
-                        // Info row at banner bottom
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.Bottom,
+                                .width(96.dp)
+                                .height(138.dp)
+                                .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                                .background(scheme.glass)
+                                .border(1.dp, scheme.stroke, RoundedCornerShape(MetroDimens.radiusSmall)),
                         ) {
-                            // Single crisp poster thumbnail with glass border
-                            Box(
-                                modifier = Modifier
-                                    .width(100.dp)
-                                    .height(144.dp)
-                                    .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                                    .background(scheme.glass)
-                                    .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(MetroDimens.radiusSmall)),
-                            ) {
-                                AsyncImage(
-                                    model = detailsPosterData,
-                                    contentDescription = displayTitleRu,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize(),
+                            AsyncImage(
+                                model = detailsPosterData,
+                                contentDescription = displayTitleRu,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = displayTitleRu,
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 20.sp,
+                                color = scheme.text,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                lineHeight = 24.sp,
+                            )
+
+                            if (!displayTitleOrig.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = displayTitleOrig,
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 12.sp,
+                                    color = scheme.textDim,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
 
-                            Spacer(modifier = Modifier.width(14.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = displayTitleRu,
-                                    fontFamily = MetroFonts.headline,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 19.sp,
-                                    color = scheme.text,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    lineHeight = 23.sp,
-                                )
-
-                                if (!displayTitleOrig.isNullOrBlank()) {
-                                    Spacer(modifier = Modifier.height(2.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                if (displayRating != null && displayRating > 0) {
                                     Text(
-                                        text = displayTitleOrig,
+                                        text = "★ ${String.format(java.util.Locale.US, "%.1f", displayRating)}",
+                                        fontFamily = MetroFonts.headline,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.sp,
+                                        color = scheme.accent,
+                                    )
+                                }
+                                val otherMeta = listOfNotNull(
+                                    displayYear?.toString(),
+                                    displaySeason ?: displayType
+                                ).joinToString(" • ")
+                                if (otherMeta.isNotBlank()) {
+                                    if (displayRating != null && displayRating > 0) {
+                                        Text(
+                                            text = "•",
+                                            fontFamily = MetroFonts.text,
+                                            fontSize = 11.sp,
+                                            color = scheme.textDim.copy(alpha = 0.5f),
+                                        )
+                                    }
+                                    Text(
+                                        text = otherMeta,
                                         fontFamily = MetroFonts.text,
                                         fontSize = 12.sp,
                                         color = scheme.textDim,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
-                                }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
-                                    if (displayRating != null && displayRating > 0) {
-                                        Text(
-                                            text = "★ ${String.format(java.util.Locale.US, "%.1f", displayRating)}",
-                                            fontFamily = MetroFonts.headline,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 12.sp,
-                                            color = scheme.accent,
-                                        )
-                                    }
-                                    val otherMeta = listOfNotNull(
-                                        displayYear?.toString(),
-                                        displaySeason ?: displayType
-                                    ).joinToString(" • ")
-                                    if (otherMeta.isNotBlank()) {
-                                        if (displayRating != null && displayRating > 0) {
-                                            Text(
-                                                text = "•",
-                                                fontFamily = MetroFonts.text,
-                                                fontSize = 11.sp,
-                                                color = scheme.textDim.copy(alpha = 0.5f),
-                                            )
-                                        }
-                                        Text(
-                                            text = otherMeta,
-                                            fontFamily = MetroFonts.text,
-                                            fontSize = 12.sp,
-                                            color = scheme.textDim,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -299,14 +266,10 @@ fun DetailsScreen(
                         }
                         val effectiveEpisodes = effectiveDub?.episodes.orEmpty()
 
-                        val currentFraction = if (watchProgress.durationMs > 0) {
-                            (targetPositionMs.toFloat() / watchProgress.durationMs.toFloat()).coerceIn(0f, 1f)
-                        } else 0f
-
                         FrostedGlassBox(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
                                 .metroClickable {
                                     if (targetEp != null && effectiveDub != null) {
                                         onPlayEpisode(
@@ -324,79 +287,57 @@ fun DetailsScreen(
                             borderColor = scheme.accent.copy(alpha = 0.35f),
                             borderWidth = 1.dp,
                         ) {
-                            Column(
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                                        .background(scheme.accent.copy(alpha = 0.16f))
+                                        .border(1.dp, scheme.accent.copy(alpha = 0.55f), RoundedCornerShape(MetroDimens.radiusSmall)),
+                                    contentAlignment = Alignment.Center,
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(42.dp)
-                                            .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                                            .background(scheme.accent.copy(alpha = 0.16f))
-                                            .border(1.dp, scheme.accent.copy(alpha = 0.55f), RoundedCornerShape(MetroDimens.radiusSmall)),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.PlayArrow,
-                                            contentDescription = "Продолжить просмотр",
-                                            tint = scheme.accent,
-                                            modifier = Modifier.size(24.dp),
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "ПРОДОЛЖИТЬ ПРОСМОТР",
-                                            fontFamily = MetroFonts.headline,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp,
-                                            letterSpacing = 1.2.sp,
-                                            color = scheme.accent,
-                                        )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        val displayOrdinal = targetEp?.ordinal ?: watchProgress.episodeOrdinal
-                                        val subtitle = if (isNewEpisode) {
-                                            "Серия $displayOrdinal • Новая серия"
-                                        } else {
-                                            "Серия $displayOrdinal • ${formatMinSec(targetPositionMs)} / ${formatMinSec(watchProgress.durationMs)}"
-                                        }
-                                        Text(
-                                            text = subtitle,
-                                            fontFamily = MetroFonts.headline,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontSize = 13.sp,
-                                            color = scheme.text,
-                                        )
-                                        Text(
-                                            text = "Озвучка: ${effectiveDub?.title ?: watchProgress.dubbingTitle}",
-                                            fontFamily = MetroFonts.text,
-                                            fontSize = 11.sp,
-                                            color = scheme.textDim,
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Продолжить просмотр",
+                                        tint = scheme.accent,
+                                        modifier = Modifier.size(24.dp),
+                                    )
                                 }
-
-                                if (currentFraction > 0f) {
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(2.dp)
-                                            .clip(RoundedCornerShape(1.dp))
-                                            .background(Color.White.copy(alpha = 0.10f))
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth(currentFraction)
-                                                .fillMaxHeight()
-                                                .background(scheme.accent)
-                                        )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "ПРОДОЛЖИТЬ ПРОСМОТР",
+                                        fontFamily = MetroFonts.headline,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        letterSpacing = 1.2.sp,
+                                        color = scheme.accent,
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    val displayOrdinal = targetEp?.ordinal ?: watchProgress.episodeOrdinal
+                                    val subtitle = if (isNewEpisode) {
+                                        "Серия $displayOrdinal • Новая серия"
+                                    } else {
+                                        "Серия $displayOrdinal • ${formatMinSec(targetPositionMs)} / ${formatMinSec(watchProgress.durationMs)}"
                                     }
+                                    Text(
+                                        text = subtitle,
+                                        fontFamily = MetroFonts.headline,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp,
+                                        color = scheme.text,
+                                    )
+                                    Text(
+                                        text = "Озвучка: ${effectiveDub?.title ?: watchProgress.dubbingTitle}",
+                                        fontFamily = MetroFonts.text,
+                                        fontSize = 11.sp,
+                                        color = scheme.textDim,
+                                    )
                                 }
                             }
                         }

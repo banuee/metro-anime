@@ -416,9 +416,6 @@ private fun LatestTabContent(
         Column(modifier = Modifier.fillMaxSize()) {
             if (history.isNotEmpty()) {
                 val last = history.first()
-                val progressFraction = if (last.durationMs > 0) {
-                    (last.positionMs.toFloat() / last.durationMs.toFloat()).coerceIn(0f, 1f)
-                } else 0f
 
                 FrostedGlassBox(
                     modifier = Modifier
@@ -430,68 +427,46 @@ private fun LatestTabContent(
                     borderColor = scheme.accent.copy(alpha = 0.35f),
                     borderWidth = 1.dp,
                 ) {
-                    Column(
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(10.dp),
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth(),
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                                .background(scheme.accent.copy(alpha = 0.16f))
+                                .border(1.dp, scheme.accent.copy(alpha = 0.55f), RoundedCornerShape(MetroDimens.radiusSmall)),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                                    .background(scheme.accent.copy(alpha = 0.16f))
-                                    .border(1.dp, scheme.accent.copy(alpha = 0.55f), RoundedCornerShape(MetroDimens.radiusSmall)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = scheme.accent,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = last.anime.titleRu,
-                                    fontFamily = MetroFonts.headline,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp,
-                                    color = scheme.text,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                val posText = if (last.positionMs == 0L) "Новая серия" else "${formatMinSec(last.positionMs)} / ${formatMinSec(last.durationMs)}"
-                                Text(
-                                    text = "Серия ${last.episodeOrdinal} • $posText",
-                                    fontFamily = MetroFonts.text,
-                                    fontSize = 11.sp,
-                                    color = scheme.accent,
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = scheme.accent,
+                                modifier = Modifier.size(22.dp),
+                            )
                         }
-
-                        if (progressFraction > 0f) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(2.dp)
-                                    .clip(RoundedCornerShape(1.dp))
-                                    .background(Color.White.copy(alpha = 0.10f))
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(progressFraction)
-                                        .fillMaxHeight()
-                                        .background(scheme.accent)
-                                )
-                            }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = last.anime.titleRu,
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = scheme.text,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            val posText = if (last.positionMs == 0L) "Новая серия" else "${formatMinSec(last.positionMs)} / ${formatMinSec(last.durationMs)}"
+                            Text(
+                                text = "Серия ${last.episodeOrdinal} • $posText",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 11.sp,
+                                color = scheme.accent,
+                            )
                         }
                     }
                 }
