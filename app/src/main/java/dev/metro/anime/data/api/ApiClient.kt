@@ -132,12 +132,151 @@ object ApiClient {
         }
     }
 
+    suspend fun getShikimoriDetails(shikimoriId: Long): AnimeTitle? = withContext(Dispatchers.IO) {
+        val domains = listOf("https://shikimori.one", "https://shikimori.io")
+        for (base in domains) {
+            val url = "$base/api/animes/$shikimoriId"
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "MetroAnime/1.0")
+                .build()
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use
+                    val body = response.body?.string() ?: return@use
+                    val obj = gson.fromJson(body, JsonObject::class.java)
+                    val ru = obj.get("russian")?.takeIf { !it.isJsonNull }?.asString
+                    val en = obj.get("name")?.takeIf { !it.isJsonNull }?.asString
+                    val imgObj = obj.getAsJsonObject("image")
+                    val origImg = imgObj?.get("original")?.takeIf { !it.isJsonNull }?.asString
+                    val poster = if (origImg != null) {
+                        if (origImg.startsWith("http")) origImg else "https://shikimori.one$origImg"
+                    } else "https://shikimori.one/system/animes/original/$shikimoriId.jpg"
+
+                    val descRaw = obj.get("description")?.takeIf { !it.isJsonNull }?.asString
+                    val cleanDesc = descRaw?.replace(Regex("\\[/?(?:character|anime|person|manga|b|i|u|url|code|spoiler)[^\\]]*\\]"), "")?.trim()
+
+                    val airedOn = obj.get("aired_on")?.takeIf { !it.isJsonNull }?.asString
+                    val year = airedOn?.take(4)?.toIntOrNull()
+                    val score = obj.get("score")?.takeIf { !it.isJsonNull }?.asDouble
+                    val eps = obj.get("episodes")?.takeIf { !it.isJsonNull }?.asInt
+
+                    val genresList = mutableListOf<String>()
+                    obj.getAsJsonArray("genres")?.forEach { g ->
+                        if (g.isJsonObject) {
+                            g.asJsonObject.get("russian")?.takeIf { !it.isJsonNull }?.asString?.let { genresList.add(it) }
+                                ?: g.asJsonObject.get("name")?.takeIf { !it.isJsonNull }?.asString?.let { genresList.add(it) }
+                        }
+                    }
+
+                    val kind = obj.get("kind")?.takeIf { !it.isJsonNull }?.asString
+                    val kindRu = when (kind?.lowercase()) {
+                        "tv" -> "ТВ Сериал"
+                        "movie" -> "Фильм"
+                        "ova" -> "OVA"
+                        "ona" -> "ONA"
+                        "special" -> "Спешл"
+                        else -> kind
+                    }
+
+                    return@withContext AnimeTitle(
+                        id = "kodik_shiki_$shikimoriId",
+                        titleRu = ru ?: en ?: "Аниме",
+                        titleOrig = en,
+                        posterUrl = poster,
+                        description = cleanDesc,
+                        year = year,
+                        type = kindRu,
+                        episodesCount = eps,
+                        genres = genresList,
+                        rating = score,
+                        shikimoriId = shikimoriId,
+                        source = AnimeSource.KODIK,
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error fetching Shikimori details at $base", e)
+            }
+        }
+        null
+    }
+
+    suspend fun searchShikimori(query: String, limit: Int = 15): List<AnimeTitle> = withContext(Dispatchers.IO) {
+        val cleanQuery = query.replace(
+            Regex("(?i)\\b(\\d+\\s*сезон|сезон\\s*\\d+|\\d+\\s*(?:st|nd|rd|th)?\\s*season|season\\s*\\d+|тв-?\\d+|тв\\s*\\d+)\\b"),
+            ""
+        ).trim()
+        val searchQuery = if (cleanQuery.isNotBlank()) cleanQuery else query
+        val domains = listOf("https://shikimori.one", "https://shikimori.io")
+        for (base in domains) {
+            val url = "$base/api/animes?search=${java.net.URLEncoder.encode(searchQuery, "UTF-8")}&limit=$limit"
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "MetroAnime/1.0")
+                .build()
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use
+                    val body = response.body?.string() ?: return@use
+                    val arr = gson.fromJson(body, JsonArray::class.java) ?: return@use
+                    val list = mutableListOf<AnimeTitle>()
+                    for (elem in arr) {
+                        val obj = elem.asJsonObject
+                        val id = obj.get("id")?.asLong ?: continue
+                        val ru = obj.get("russian")?.takeIf { !it.isJsonNull }?.asString
+                        val en = obj.get("name")?.takeIf { !it.isJsonNull }?.asString
+                        val title = ru ?: en ?: continue
+                        val imgObj = obj.getAsJsonObject("image")
+                        val origImg = imgObj?.get("original")?.takeIf { !it.isJsonNull }?.asString
+                        val poster = if (origImg != null) {
+                            if (origImg.startsWith("http")) origImg else "https://shikimori.one$origImg"
+                        } else "https://shikimori.one/system/animes/original/$id.jpg"
+
+                        val kind = obj.get("kind")?.takeIf { !it.isJsonNull }?.asString
+                        val kindRu = when (kind?.lowercase()) {
+                            "tv" -> "ТВ Сериал"
+                            "movie" -> "Фильм"
+                            "ova" -> "OVA"
+                            "ona" -> "ONA"
+                            "special" -> "Спешл"
+                            else -> kind
+                        }
+                        val score = obj.get("score")?.takeIf { !it.isJsonNull }?.asDouble
+                        val eps = obj.get("episodes")?.takeIf { !it.isJsonNull }?.asInt
+                        val airedOn = obj.get("aired_on")?.takeIf { !it.isJsonNull }?.asString
+                        val year = airedOn?.take(4)?.toIntOrNull()
+
+                        list.add(
+                            AnimeTitle(
+                                id = "kodik_shiki_$id",
+                                titleRu = title,
+                                titleOrig = en,
+                                posterUrl = poster,
+                                year = year,
+                                type = kindRu,
+                                episodesCount = eps,
+                                rating = score,
+                                shikimoriId = id,
+                                source = AnimeSource.KODIK,
+                            )
+                        )
+                    }
+                    if (list.isNotEmpty()) return@withContext list
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error searching Shikimori at $base", e)
+            }
+        }
+        emptyList()
+    }
+
     suspend fun searchKodikTitles(query: String, limit: Int = 100): List<AnimeTitle> = withContext(Dispatchers.IO) {
         val formBuilder = FormBody.Builder()
             .add("token", KODIK_TOKEN)
             .add("title", query)
             .add("limit", limit.coerceIn(1, 100).toString())
             .add("types", "anime,anime-serial")
+            .add("with_material_data", "true")
 
         val request = Request.Builder()
             .url(KODIK_API_URL)
@@ -156,33 +295,69 @@ object ApiClient {
 
                 for (res in results) {
                     val obj = res.asJsonObject
-                    val titleRu = obj.get("title")?.takeIf { !it.isJsonNull }?.asString ?: continue
+                    val rawTitleRu = obj.get("title")?.takeIf { !it.isJsonNull }?.asString ?: continue
                     val titleOrig = obj.get("title_orig")?.takeIf { !it.isJsonNull }?.asString
-                    val cleanKey = titleRu.lowercase().trim()
+                    val shikiId = obj.get("shikimori_id")?.takeIf { !it.isJsonNull }?.asLong
+
+                    val matData = obj.getAsJsonObject("material_data")
+                    val matTitle = matData?.get("anime_title")?.takeIf { !it.isJsonNull }?.asString
+                    val matPoster = matData?.get("poster_url")?.takeIf { !it.isJsonNull }?.asString
+                    val matDesc = matData?.get("description")?.takeIf { !it.isJsonNull }?.asString
+                    val matRating = matData?.get("shikimori_rating")?.takeIf { !it.isJsonNull }?.asDouble
+                        ?: matData?.get("kinopoisk_rating")?.takeIf { !it.isJsonNull }?.asDouble
+
+                    // Prefer clean title without [ТВ-1], [ТВ-2]
+                    val cleanTitle = if (!matTitle.isNullOrBlank() && !matTitle.contains("[тв-", ignoreCase = true)) {
+                        matTitle
+                    } else {
+                        rawTitleRu.replace(Regex("\\[тв-?\\d+\\]", RegexOption.IGNORE_CASE), "").trim()
+                    }
+
+                    val cleanKey = cleanTitle.lowercase().trim()
                     if (seenTitles.contains(cleanKey)) continue
                     seenTitles.add(cleanKey)
 
-                    val shikiId = obj.get("shikimori_id")?.takeIf { !it.isJsonNull }?.asLong
                     val year = obj.get("year")?.takeIf { !it.isJsonNull }?.asInt
-                    val type = obj.get("type")?.takeIf { !it.isJsonNull }?.asString
+                        ?: matData?.get("year")?.takeIf { !it.isJsonNull }?.asInt
+
+                    val rawType = obj.get("type")?.takeIf { !it.isJsonNull }?.asString
+                    val type = when (rawType?.lowercase()) {
+                        "anime-serial" -> "Сериал"
+                        "anime" -> "Фильм"
+                        else -> rawType
+                    }
+
                     val screens = obj.getAsJsonArray("screenshots")
-                    val poster = if (screens != null && screens.size() > 0) {
+                    val poster = if (shikiId != null && shikiId > 0) {
+                        "https://shikimori.one/system/animes/original/$shikiId.jpg"
+                    } else if (!matPoster.isNullOrBlank()) {
+                        matPoster
+                    } else if (screens != null && screens.size() > 0) {
                         var p = screens[0].asString
                         if (p.startsWith("//")) p = "https:$p"
-                        if (p.contains("/system/animes/original/")) {
-                            p = p.replace("/system/animes/original/", "/system/animes/preview/")
-                        }
                         p
                     } else ""
 
+                    val episodesCount = obj.get("episodes_count")?.takeIf { !it.isJsonNull }?.asInt
+                        ?: matData?.get("episodes_total")?.takeIf { !it.isJsonNull }?.asInt
+
+                    val genresList = mutableListOf<String>()
+                    matData?.getAsJsonArray("anime_genres")?.forEach { g ->
+                        if (g.isJsonPrimitive) genresList.add(g.asString)
+                    }
+
                     list.add(
                         AnimeTitle(
-                            id = "kodik_${obj.get("id")?.asString ?: titleRu}",
-                            titleRu = titleRu,
+                            id = "kodik_${obj.get("id")?.asString ?: rawTitleRu}",
+                            titleRu = cleanTitle,
                             titleOrig = titleOrig,
                             posterUrl = poster,
+                            description = matDesc,
                             year = year,
                             type = type,
+                            episodesCount = episodesCount,
+                            genres = genresList,
+                            rating = matRating,
                             shikimoriId = shikiId,
                             source = AnimeSource.KODIK,
                         )

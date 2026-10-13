@@ -141,7 +141,14 @@ fun AnimeTileCard(
             ) {
                 val epText = when {
                     anime.episodesCount != null -> "${anime.episodesCount} эп."
-                    anime.type != null -> anime.type
+                    anime.type != null -> when (anime.type.lowercase().trim()) {
+                        "anime-serial", "tv", "serial", "сериал" -> "Сериал"
+                        "anime", "movie", "фильм" -> "Фильм"
+                        "ova", "ова" -> "OVA"
+                        "ona", "она" -> "ONA"
+                        "special", "спешл", "спэшл" -> "Спешл"
+                        else -> anime.type
+                    }
                     else -> "Сериал"
                 }
                 Text(

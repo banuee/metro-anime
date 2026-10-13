@@ -1,11 +1,14 @@
 package dev.metro.anime.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
@@ -96,8 +99,9 @@ fun DetailsScreen(
             .navigationBarsPadding(),
     ) {
         // Top Bar
+        val effectiveTopTitle = details?.title?.titleRu?.ifBlank { null } ?: anime.titleRu
         MetroTopBar(
-            title = anime.titleRu,
+            title = effectiveTopTitle,
             onBackClick = onBackClick,
             trailingAction = {
                 MetroIconButton(
@@ -129,7 +133,17 @@ fun DetailsScreen(
                 // Header Banner with Poster
                 item {
                     val isSerost = dev.metro.anime.ui.theme.LocalSerostMode.current
-                    val detailsPosterData: Any? = if (isSerost) dev.metro.anime.R.drawable.serost_cat else anime.posterUrl
+                    val detailsPosterData: Any? = if (isSerost) {
+                        dev.metro.anime.R.drawable.serost_cat
+                    } else {
+                        loadedDetails?.title?.posterUrl?.ifBlank { null } ?: anime.posterUrl
+                    }
+                    val displayTitleRu = loadedDetails?.title?.titleRu?.ifBlank { null } ?: anime.titleRu
+                    val displayTitleOrig = loadedDetails?.title?.titleOrig ?: anime.titleOrig
+                    val displayRating = loadedDetails?.title?.rating ?: anime.rating
+                    val displayYear = loadedDetails?.title?.year ?: anime.year
+                    val displaySeason = loadedDetails?.title?.season ?: anime.season
+                    val displayType = loadedDetails?.title?.type ?: anime.type
 
                     Box(
                         modifier = Modifier
@@ -138,7 +152,7 @@ fun DetailsScreen(
                     ) {
                         AsyncImage(
                             model = detailsPosterData,
-                            contentDescription = anime.titleRu,
+                            contentDescription = displayTitleRu,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -185,7 +199,7 @@ fun DetailsScreen(
 
                             Column {
                                 Text(
-                                    text = anime.titleRu,
+                                    text = displayTitleRu,
                                     fontFamily = MetroFonts.headline,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 18.sp,
@@ -194,10 +208,10 @@ fun DetailsScreen(
                                     overflow = TextOverflow.Ellipsis,
                                 )
 
-                                if (anime.titleOrig != null) {
+                                if (!displayTitleOrig.isNullOrBlank()) {
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = anime.titleOrig,
+                                        text = displayTitleOrig,
                                         fontFamily = MetroFonts.text,
                                         fontSize = 12.sp,
                                         color = scheme.textDim,
@@ -208,14 +222,16 @@ fun DetailsScreen(
                                 Spacer(modifier = Modifier.height(6.dp))
 
                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    if (anime.rating != null && anime.rating > 0) {
-                                        MetroChip(text = "★ ${String.format("%.1f", anime.rating)}")
+                                    if (displayRating != null && displayRating > 0) {
+                                        MetroChip(text = "★ ${String.format("%.1f", displayRating)}")
                                     }
-                                    if (anime.year != null) {
-                                        MetroChip(text = "${anime.year}")
+                                    if (displayYear != null) {
+                                        MetroChip(text = "$displayYear")
                                     }
-                                    if (anime.season != null) {
-                                        MetroChip(text = anime.season)
+                                    if (displaySeason != null) {
+                                        MetroChip(text = displaySeason)
+                                    } else if (displayType != null) {
+                                        MetroChip(text = displayType)
                                     }
                                 }
                             }
@@ -329,13 +345,14 @@ fun DetailsScreen(
                 }
 
                 // Genres
-                if (anime.safeGenres.isNotEmpty()) {
+                val displayGenres = loadedDetails?.title?.safeGenres?.ifEmpty { null } ?: anime.safeGenres
+                if (displayGenres.isNotEmpty()) {
                     item {
                         LazyRow(
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            items(anime.safeGenres) { genre ->
+                            items(displayGenres) { genre ->
                                 MetroChip(text = genre)
                             }
                         }
@@ -343,7 +360,8 @@ fun DetailsScreen(
                 }
 
                 // Description
-                val desc = loadedDetails?.rawDescription ?: anime.description
+                val desc = (loadedDetails?.rawDescription ?: loadedDetails?.title?.description ?: anime.description)
+                    ?.takeIf { !it.startsWith("Просмотр через Kodik") }
                 if (!desc.isNullOrBlank()) {
                     item {
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -367,30 +385,51 @@ fun DetailsScreen(
                     }
                 }
 
-                // Dubbings selector
+                // Dubbings selector (Windows Phone Pivot style)
                 if (currentDubs.isNotEmpty()) {
                     item {
-                        Column(modifier = Modifier.padding(top = 16.dp)) {
+                        Column(modifier = Modifier.padding(top = 18.dp)) {
                             Text(
                                 text = "ОЗВУЧКА",
                                 fontFamily = MetroFonts.headline,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp,
-                                letterSpacing = 1.sp,
+                                fontSize = 12.sp,
+                                letterSpacing = 2.sp,
                                 color = scheme.textDim,
                                 modifier = Modifier.padding(horizontal = 16.dp),
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val dubListState = rememberLazyListState(initialFirstVisibleItemIndex = selectedDubIndex)
+                            LaunchedEffect(selectedDubIndex) {
+                                if (selectedDubIndex in currentDubs.indices) {
+                                    dubListState.animateScrollToItem(selectedDubIndex)
+                                }
+                            }
                             LazyRow(
+                                state = dubListState,
                                 contentPadding = PaddingValues(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 4.dp),
                             ) {
                                 items(currentDubs.indices.toList()) { idx ->
                                     val dub = currentDubs[idx]
-                                    MetroChip(
-                                        text = dub.title,
-                                        isSelected = idx == selectedDubIndex,
-                                        onClick = {
+                                    val isSelected = idx == selectedDubIndex
+                                    val alpha by animateFloatAsState(
+                                        targetValue = if (isSelected) 1f else 0.35f,
+                                        animationSpec = tween(durationMillis = 200),
+                                        label = "dub_pivot_alpha",
+                                    )
+                                    Text(
+                                        text = dub.title.lowercase(),
+                                        fontFamily = MetroFonts.headline,
+                                        fontWeight = FontWeight.Light,
+                                        fontSize = 28.sp,
+                                        letterSpacing = (-0.5).sp,
+                                        color = scheme.text.copy(alpha = alpha),
+                                        modifier = Modifier.metroClickable(targetScale = 0.96f) {
                                             selectedDubIndex = idx
                                             selectedRangeIndex = 0
                                         },

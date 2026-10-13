@@ -50,95 +50,163 @@ class AnimeRepository(context: Context) {
             ApiClient.searchAniLibria(shikiQuery, limit = 25)
         } else emptyList()
 
+        val shikiResults = ApiClient.searchShikimori(query, limit = 15)
+
         val kodikQuery = shikiQuery ?: (if (baseCleanQuery.isNotBlank()) baseCleanQuery else query)
-        val kodikResults = ApiClient.searchKodikTitles(kodikQuery, limit = 100)
+        val kodikResults = ApiClient.searchKodikTitles(kodikQuery, limit = 50)
 
         val combined = mutableListOf<AnimeTitle>()
-        combined.addAll(directResults)
-        val seenTitles = directResults.map { it.titleRu.lowercase().trim() }.toMutableSet()
-        val seenShiki = directResults.mapNotNull { it.shikimoriId }.toMutableSet()
+        val seenTitles = mutableSetOf<String>()
+        val seenShiki = mutableSetOf<Long>()
 
-        for (item in baseAniResults) {
+        fun tryAdd(item: AnimeTitle) {
             val key = item.titleRu.lowercase().trim()
             val shiki = item.shikimoriId
-            if (!seenTitles.contains(key) && (shiki == null || !seenShiki.contains(shiki))) {
-                combined.add(item)
-                seenTitles.add(key)
-                if (shiki != null) seenShiki.add(shiki)
-            }
+            if (shiki != null && seenShiki.contains(shiki)) return
+            if (seenTitles.contains(key)) return
+            combined.add(item)
+            seenTitles.add(key)
+            if (shiki != null) seenShiki.add(shiki)
         }
 
-        for (item in shikiAniResults) {
-            val key = item.titleRu.lowercase().trim()
-            val shiki = item.shikimoriId
-            if (!seenTitles.contains(key) && (shiki == null || !seenShiki.contains(shiki))) {
-                combined.add(item)
-                seenTitles.add(key)
-                if (shiki != null) seenShiki.add(shiki)
-            }
-        }
+        directResults.forEach { tryAdd(it) }
+        baseAniResults.forEach { tryAdd(it) }
+        shikiAniResults.forEach { tryAdd(it) }
+        shikiResults.forEach { tryAdd(it) }
+        kodikResults.forEach { tryAdd(it) }
 
-        for (item in kodikResults) {
-            val key = item.titleRu.lowercase().trim()
-            val shiki = item.shikimoriId
-            val hasExplicitSeasonTag = key.contains("[тв-") || key.contains("сезон")
-            if (!seenTitles.contains(key) && (shiki == null || !seenShiki.contains(shiki) || hasExplicitSeasonTag)) {
-                combined.add(item)
-                seenTitles.add(key)
-                if (shiki != null && !hasExplicitSeasonTag) seenShiki.add(shiki)
-            }
-        }
-
-        val isSeekingSeason1 = query.contains("1 сезон", ignoreCase = true) ||
-                query.contains("сезон 1", ignoreCase = true) ||
-                query.contains("тв-1", ignoreCase = true) ||
-                query.contains("тв 1", ignoreCase = true) ||
-                query.contains("1st season", ignoreCase = true) ||
-                query.contains("season 1", ignoreCase = true)
+        val q = query.lowercase().trim()
+        val isSeekingSeason1 = q.contains("1 сезон") || q.contains("сезон 1") || q.contains("тв-1") || q.contains("тв 1") || q.contains("1st season") || q.contains("season 1")
+        val isSeekingSeason2 = q.contains("2 сезон") || q.contains("сезон 2") || q.contains("тв-2") || q.contains("тв 2") || q.contains("2nd season") || q.contains("season 2")
 
         val sorted = combined.sortedWith { a, b ->
-            val aTitle = a.titleRu.lowercase()
-            val bTitle = b.titleRu.lowercase()
-            val aIsSpecial = aTitle.contains("спэшл") || aTitle.contains("спешл") || aTitle.contains("special") || aTitle.contains("ova") || aTitle.contains("ова")
-            val bIsSpecial = bTitle.contains("спэшл") || bTitle.contains("спешл") || bTitle.contains("special") || bTitle.contains("ova") || bTitle.contains("ова")
-
-            if (isSeekingSeason1) {
-                val aIsS1 = aTitle.contains("[тв-1]") || aTitle.contains("1 сезон") || (!aTitle.contains("2") && !aIsSpecial)
-                val bIsS1 = bTitle.contains("[тв-1]") || bTitle.contains("1 сезон") || (!bTitle.contains("2") && !bIsSpecial)
-                if (aIsS1 && !bIsS1) return@sortedWith -1
-                if (!aIsS1 && bIsS1) return@sortedWith 1
-            }
-
-            if (!aIsSpecial && bIsSpecial) return@sortedWith -1
-            if (aIsSpecial && !bIsSpecial) return@sortedWith 1
-
-            0
+            val scoreA = calculateRelevanceScore(a, q, isSeekingSeason1, isSeekingSeason2)
+            val scoreB = calculateRelevanceScore(b, q, isSeekingSeason1, isSeekingSeason2)
+            scoreB.compareTo(scoreA)
         }
 
         return sorted
+    }
+
+    private fun calculateRelevanceScore(
+        item: AnimeTitle,
+        q: String,
+        isSeekingSeason1: Boolean,
+        isSeekingSeason2: Boolean,
+    ): Int {
+        var score = 0
+        val t = item.titleRu.lowercase().trim()
+        val typeStr = item.type?.lowercase().orEmpty()
+        val isSpecial = t.contains("спэшл") || t.contains("спешл") || t.contains("special") ||
+                t.contains("ova") || t.contains("ова") || t.contains("тиби") || t.contains("чиби") ||
+                typeStr.contains("спешл") || typeStr.contains("ova")
+        val isMovie = typeStr == "anime" || typeStr.contains("фильм") || typeStr.contains("movie") ||
+                t.contains("фильм") || t.contains("movie") || Regex("\\b(?:2|3|4|5|6|7|8|9|10):\\s").containsMatchIn(t)
+        val isTv = typeStr.contains("serial") || typeStr.contains("сериал") || typeStr.contains("тв") ||
+                (item.episodesCount ?: 0) > 1
+
+        // Match quality
+        if (t == q || t == "$q 1" || t == "$q [тв-1]") {
+            score += 2000
+        } else if (t.startsWith("$q:") || t.startsWith("$q ") || t.startsWith("$q-")) {
+            score += 1500
+        } else if (t.contains(q)) {
+            score += 1000
+        } else {
+            score += 500
+        }
+
+        // TV series preference over movies
+        if (isTv) score += 300
+        if (isMovie) score -= 200
+        if (isSpecial) score -= 800
+
+        // Canonical season ordering
+        if (isSeekingSeason1) {
+            val isS1 = t.contains("1 сезон") || t.contains("тв-1") || (!t.contains("2") && !isSpecial && !isMovie)
+            if (isS1) score += 700
+        } else if (isSeekingSeason2) {
+            val isS2 = t.contains("2 сезон") || t.contains("тв-2") || t.contains(" 2") || t.contains("второй") || t.contains("ураганные хроники")
+            if (isS2) score += 700
+        } else {
+            // General query: Season 1 / main TV series first!
+            if (t == q || (!t.contains(" 2") && !t.contains("сезон 2") && !t.contains("тв-2"))) {
+                score += 200
+            }
+        }
+
+        // Tie-breaker: score/rating
+        val ratingBonus = ((item.rating ?: 0.0) * 10).toInt().coerceIn(0, 100)
+        score += ratingBonus
+
+        return score
     }
 
     suspend fun getAnimeDetails(idOrAlias: String, shikimoriId: Long?, titleQuery: String?): AnimeDetails? {
         val details: AnimeDetails
         val kodikDubs: List<DubbingGroup>
 
-        if (idOrAlias.startsWith("kodik_")) {
-            kodikDubs = ApiClient.getKodikDubs(shikimoriId, titleQuery)
+        if (idOrAlias.startsWith("kodik_") || idOrAlias.startsWith("shiki_")) {
+            var effectiveShikiId = shikimoriId
+            if (effectiveShikiId == null && idOrAlias.startsWith("kodik_shiki_")) {
+                effectiveShikiId = idOrAlias.removePrefix("kodik_shiki_").toLongOrNull()
+            }
+            if (effectiveShikiId == null && idOrAlias.startsWith("shiki_")) {
+                effectiveShikiId = idOrAlias.removePrefix("shiki_").toLongOrNull()
+            }
+
+            var shikiTitle: AnimeTitle? = null
+            if (effectiveShikiId != null && effectiveShikiId > 0) {
+                shikiTitle = ApiClient.getShikimoriDetails(effectiveShikiId)
+            }
+            if (shikiTitle == null && !titleQuery.isNullOrBlank()) {
+                val shikiList = ApiClient.searchShikimori(titleQuery, limit = 3)
+                shikiTitle = shikiList.firstOrNull()
+                if (shikiTitle != null && effectiveShikiId == null) {
+                    effectiveShikiId = shikiTitle.shikimoriId
+                }
+            }
+
+            kodikDubs = ApiClient.getKodikDubs(effectiveShikiId, titleQuery ?: shikiTitle?.titleRu)
+
+            val resolvedTitleRu = shikiTitle?.titleRu ?: titleQuery ?: "Аниме"
+            val resolvedPoster = shikiTitle?.posterUrl?.ifBlank { null }
+                ?: if (effectiveShikiId != null && effectiveShikiId > 0) "https://shikimori.one/system/animes/original/$effectiveShikiId.jpg" else ""
+            val resolvedDesc = shikiTitle?.description?.ifBlank { null }
+
             details = AnimeDetails(
                 title = AnimeTitle(
                     id = idOrAlias,
-                    titleRu = titleQuery ?: "Аниме",
-                    posterUrl = "",
-                    shikimoriId = shikimoriId,
+                    titleRu = resolvedTitleRu,
+                    titleOrig = shikiTitle?.titleOrig,
+                    posterUrl = resolvedPoster,
+                    description = resolvedDesc,
+                    year = shikiTitle?.year,
+                    type = shikiTitle?.type,
+                    episodesCount = shikiTitle?.episodesCount ?: kodikDubs.firstOrNull()?.episodes?.size,
+                    genres = shikiTitle?.genres,
+                    rating = shikiTitle?.rating,
+                    shikimoriId = effectiveShikiId,
                     source = AnimeSource.KODIK,
                 ),
                 dubbings = emptyList(),
-                rawDescription = "Просмотр через Kodik",
+                rawDescription = resolvedDesc,
             )
         } else {
             val aniDetails = ApiClient.getAniLibriaDetails(idOrAlias) ?: return null
-            kodikDubs = ApiClient.getKodikDubs(shikimoriId ?: aniDetails.title.shikimoriId, titleQuery ?: aniDetails.title.titleRu)
-            details = aniDetails
+            var enrichedTitle = aniDetails.title
+            var enrichedDesc = aniDetails.rawDescription
+            val effectiveShiki = shikimoriId ?: aniDetails.title.shikimoriId
+            if (effectiveShiki != null && effectiveShiki > 0 && (enrichedDesc.isNullOrBlank() || enrichedTitle.posterUrl.isBlank())) {
+                val shikiInfo = ApiClient.getShikimoriDetails(effectiveShiki)
+                if (shikiInfo != null) {
+                    if (enrichedDesc.isNullOrBlank()) enrichedDesc = shikiInfo.description
+                    if (enrichedTitle.posterUrl.isBlank()) enrichedTitle = enrichedTitle.copy(posterUrl = shikiInfo.posterUrl)
+                    if (enrichedTitle.rating == null) enrichedTitle = enrichedTitle.copy(rating = shikiInfo.rating)
+                }
+            }
+            kodikDubs = ApiClient.getKodikDubs(effectiveShiki, titleQuery ?: aniDetails.title.titleRu)
+            details = aniDetails.copy(title = enrichedTitle, rawDescription = enrichedDesc)
         }
 
         val fillers = try {
