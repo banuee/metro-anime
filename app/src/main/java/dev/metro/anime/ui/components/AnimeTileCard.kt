@@ -72,49 +72,7 @@ fun AnimeTileCard(
                 )
         )
 
-        // Badges: Top Right Rating or Year
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            if (anime.rating != null && anime.rating > 0) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color.Black.copy(alpha = 0.70f))
-                        .border(1.dp, scheme.accent.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "★ ${String.format("%.1f", anime.rating)}",
-                        fontFamily = MetroFonts.text,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 11.sp,
-                        color = scheme.accent,
-                    )
-                }
-            } else if (anime.year != null) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(Color.Black.copy(alpha = 0.70f))
-                        .border(1.dp, scheme.stroke, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "${anime.year}",
-                        fontFamily = MetroFonts.text,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 11.sp,
-                        color = scheme.textDim,
-                    )
-                }
-            }
-        }
-
-        // Bottom text: Title, Season / Episodes
+        // Bottom text: Title, Metadata (Rating/Year • Episodes / Type, Genre)
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -151,14 +109,28 @@ fun AnimeTileCard(
                     }
                     else -> "Сериал"
                 }
+
+                val metaInfo = buildString {
+                    if (anime.rating != null && anime.rating > 0) {
+                        append("★ ${String.format(java.util.Locale.US, "%.1f", anime.rating)} • ")
+                    } else if (anime.year != null) {
+                        append("${anime.year} • ")
+                    }
+                    append(epText)
+                }
+
                 Text(
-                    text = epText,
+                    text = metaInfo,
                     fontFamily = MetroFonts.text,
                     fontSize = 11.sp,
                     color = scheme.textDim,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
 
                 if (anime.safeGenres.isNotEmpty()) {
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = anime.safeGenres.first(),
                         fontFamily = MetroFonts.text,

@@ -103,7 +103,7 @@ fun PlayerScreen(
     val playerOpacity = currentSettings.playerControlsOpacity
     val hudPillGlass = Color(0xFF101016).copy(alpha = playerOpacity)
     val hudCardGlass = hudPillGlass
-    val hudBorder = Color.White.copy(alpha = (playerOpacity * 0.35f).coerceIn(0.05f, 0.25f))
+    val hudBorder = Color.White.copy(alpha = (playerOpacity * 0.10f).coerceIn(0.03f, 0.08f))
 
     val hazeState = remember { HazeState() }
     val playerBlurEnabled = currentSettings.playerBlurEnabled
@@ -1390,13 +1390,6 @@ fun PlayerScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(horizontal = 8.dp),
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = scheme.accent,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "${episode.ordinal} Серия",
                                 fontFamily = MetroFonts.headline,
@@ -1829,31 +1822,37 @@ fun PlayerScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // Play / Pause Button
-                        IconButton(
-                            onClick = {
-                                if (isPlaying) {
-                                    exoPlayer.pause()
-                                } else {
-                                    exoPlayer.play()
-                                    ensureAudioAwake()
-                                }
-                            }
+                        // Play / Pause Glass Button
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(scheme.accent.copy(alpha = 0.16f))
+                                .border(1.dp, scheme.accent.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
+                                .metroClickable {
+                                    if (isPlaying) {
+                                        exoPlayer.pause()
+                                    } else {
+                                        exoPlayer.play()
+                                        ensureAudioAwake()
+                                    }
+                                },
+                            contentAlignment = Alignment.Center,
                         ) {
                             Icon(
                                 imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = if (isPlaying) "Пауза" else "Играть",
                                 tint = scheme.accent,
-                                modifier = Modifier.size(26.dp),
+                                modifier = Modifier.size(22.dp),
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
 
                         // Current Time
                         Text(
                             text = formatTime(currentPositionMs),
-                            fontFamily = MetroFonts.text,
+                            fontFamily = MetroFonts.headline,
                             fontSize = 12.sp,
                             color = scheme.text,
                         )
