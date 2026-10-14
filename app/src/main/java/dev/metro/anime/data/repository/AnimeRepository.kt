@@ -50,10 +50,19 @@ class AnimeRepository(context: Context) {
             ApiClient.searchAniLibria(shikiQuery, limit = 25)
         } else emptyList()
 
-        val shikiResults = ApiClient.searchShikimori(query, limit = 15)
+        val shikiResults = ApiClient.searchShikimori(query, limit = 25)
 
-        val kodikQuery = shikiQuery ?: (if (baseCleanQuery.isNotBlank()) baseCleanQuery else query)
-        val kodikResults = ApiClient.searchKodikTitles(kodikQuery, limit = 50)
+        val kodikResults = mutableListOf<AnimeTitle>()
+        val primaryKodik = ApiClient.searchKodikTitles(query, limit = 100)
+        kodikResults.addAll(primaryKodik)
+        if (!shikiQuery.isNullOrBlank() && !shikiQuery.equals(query, ignoreCase = true)) {
+            val altKodik = ApiClient.searchKodikTitles(shikiQuery, limit = 100)
+            kodikResults.addAll(altKodik)
+        }
+        if (baseCleanQuery.isNotBlank() && !baseCleanQuery.equals(query, ignoreCase = true) && !baseCleanQuery.equals(shikiQuery, ignoreCase = true)) {
+            val baseKodik = ApiClient.searchKodikTitles(baseCleanQuery, limit = 100)
+            kodikResults.addAll(baseKodik)
+        }
 
         val combined = mutableListOf<AnimeTitle>()
         val seenTitles = mutableSetOf<String>()
@@ -72,70 +81,116 @@ class AnimeRepository(context: Context) {
         directResults.forEach { tryAdd(it) }
         baseAniResults.forEach { tryAdd(it) }
         shikiAniResults.forEach { tryAdd(it) }
-        shikiResults.forEach { tryAdd(it) }
         kodikResults.forEach { tryAdd(it) }
+        shikiResults.forEach { tryAdd(it) }
 
         val q = query.lowercase().trim()
-        val isSeekingSeason1 = q.contains("1 сезон") || q.contains("сезон 1") || q.contains("тв-1") || q.contains("тв 1") || q.contains("1st season") || q.contains("season 1")
-        val isSeekingSeason2 = q.contains("2 сезон") || q.contains("сезон 2") || q.contains("тв-2") || q.contains("тв 2") || q.contains("2nd season") || q.contains("season 2")
+        val soughtSeason = extractSeasonNumber(q)
+        val isSeekingFinal = q.contains("финал") || q.contains("final")
 
         val sorted = combined.sortedWith { a, b ->
-            val scoreA = calculateRelevanceScore(a, q, isSeekingSeason1, isSeekingSeason2)
-            val scoreB = calculateRelevanceScore(b, q, isSeekingSeason1, isSeekingSeason2)
+            val scoreA = calculateRelevanceScore(a, q, soughtSeason, isSeekingFinal)
+            val scoreB = calculateRelevanceScore(b, q, soughtSeason, isSeekingFinal)
             scoreB.compareTo(scoreA)
         }
 
         return sorted
     }
 
+    private fun extractSeasonNumber(text: String): Int? {
+        val lower = text.lowercase()
+        val mTv = Regex("\\[тв-(\\d+)").find(lower) ?: Regex("\\bтв-?(\\d+)\\b").find(lower)
+        if (mTv != null) return mTv.groupValues[1].toIntOrNull()
+
+        val mSeas = Regex("(\\d+)\\s*сезон").find(lower) ?: Regex("сезон\\s*(\\d+)").find(lower)
+        if (mSeas != null) return mSeas.groupValues[1].toIntOrNull()
+
+        val mEng = Regex("(\\d+)(?:st|nd|rd|th)?\\s*season").find(lower) ?: Regex("season\\s*(\\d+)").find(lower)
+        if (mEng != null) return mEng.groupValues[1].toIntOrNull()
+
+        if (lower.contains("первый сезон")) return 1
+        if (lower.contains("второй сезон")) return 2
+        if (lower.contains("третий сезон")) return 3
+        if (lower.contains("четвертый сезон") || lower.contains("четвёртый сезон")) return 4
+        if (lower.contains("пятый сезон")) return 5
+
+        return null
+    }
+
+    private fun extractPartNumber(text: String): Int {
+        val lower = text.lowercase()
+        val mPart = Regex("часть\\s*(\\d+)").find(lower) ?: Regex("part\\s*(\\d+)").find(lower)
+        if (mPart != null) return mPart.groupValues[1].toIntOrNull() ?: 1
+        if (lower.contains("заключительная глава")) return 3
+        return 1
+    }
+
     private fun calculateRelevanceScore(
         item: AnimeTitle,
         q: String,
-        isSeekingSeason1: Boolean,
-        isSeekingSeason2: Boolean,
+        soughtSeason: Int?,
+        isSeekingFinal: Boolean,
     ): Int {
-        var score = 0
+        var score = 1000
         val t = item.titleRu.lowercase().trim()
         val typeStr = item.type?.lowercase().orEmpty()
+
         val isSpecial = t.contains("спэшл") || t.contains("спешл") || t.contains("special") ||
                 t.contains("ova") || t.contains("ова") || t.contains("тиби") || t.contains("чиби") ||
-                typeStr.contains("спешл") || typeStr.contains("ova")
+                t.contains("коллаб") || typeStr.contains("спешл") || typeStr.contains("ova")
         val isMovie = typeStr == "anime" || typeStr.contains("фильм") || typeStr.contains("movie") ||
-                t.contains("фильм") || t.contains("movie") || Regex("\\b(?:2|3|4|5|6|7|8|9|10):\\s").containsMatchIn(t)
-        val isTv = typeStr.contains("serial") || typeStr.contains("сериал") || typeStr.contains("тв") ||
-                (item.episodesCount ?: 0) > 1
+                t.contains("фильм") || t.contains("movie") || t.contains("хроника") || t.contains("крылья свободы") ||
+                Regex("\\b(?:2|3|4|5|6|7|8|9|10):\\s").containsMatchIn(t)
+        val isSpinoff = t.contains("средней школы") || t.contains("чудо-титаны") || t.contains("сникерс") || t.contains("драма")
 
-        // Match quality
+        val season = extractSeasonNumber(t) ?: if (!isSpecial && !isMovie && !isSpinoff && !t.contains("финал")) 1 else if (t.contains("финал")) 4 else null
+        val part = extractPartNumber(t)
+
+        // Query match quality
+        val cleanQ = q.replace(Regex("(?i)\\b(\\d+\\s*сезон|сезон\\s*\\d+|тв-?\\d+|финал)\\b"), "").trim()
         if (t == q || t == "$q 1" || t == "$q [тв-1]") {
-            score += 2000
-        } else if (t.startsWith("$q:") || t.startsWith("$q ") || t.startsWith("$q-")) {
             score += 1500
-        } else if (t.contains(q)) {
-            score += 1000
-        } else {
+        } else if (cleanQ.isNotBlank() && (t == cleanQ || t.startsWith("$cleanQ [тв-") || t.startsWith("$cleanQ:"))) {
+            score += 1200
+        } else if (t.startsWith(q) || (cleanQ.isNotBlank() && t.startsWith(cleanQ))) {
+            score += 800
+        } else if (t.contains(q) || (cleanQ.isNotBlank() && t.contains(cleanQ))) {
             score += 500
         }
 
-        // TV series preference over movies
-        if (isTv) score += 300
-        if (isMovie) score -= 200
-        if (isSpecial) score -= 800
-
-        // Canonical season ordering
-        if (isSeekingSeason1) {
-            val isS1 = t.contains("1 сезон") || t.contains("тв-1") || (!t.contains("2") && !isSpecial && !isMovie)
-            if (isS1) score += 700
-        } else if (isSeekingSeason2) {
-            val isS2 = t.contains("2 сезон") || t.contains("тв-2") || t.contains(" 2") || t.contains("второй") || t.contains("ураганные хроники")
-            if (isS2) score += 700
+        // Penalties for specials / spinoffs / movies
+        if (isSpecial) {
+            score -= 900
+        } else if (isSpinoff) {
+            score -= 600
+        } else if (isMovie) {
+            score -= 400
         } else {
-            // General query: Season 1 / main TV series first!
-            if (t == q || (!t.contains(" 2") && !t.contains("сезон 2") && !t.contains("тв-2"))) {
-                score += 200
+            // Main TV series
+            score += 300
+            if (soughtSeason != null) {
+                if (season == soughtSeason) {
+                    score += 2000
+                }
+            } else if (isSeekingFinal) {
+                if (t.contains("финал") || season == 4) {
+                    score += 2000
+                }
+            } else {
+                // Canonical chronological order for main TV series:
+                // Season 1 > Season 2 > Season 3 > Season 4...
+                if (season != null) {
+                    score += 500 + (10 - season.coerceIn(1, 9)) * 100 + (5 - part.coerceIn(1, 4)) * 10
+                }
             }
         }
 
-        // Tie-breaker: score/rating
+        // Release year priority (earlier years preferred for chronological ordering)
+        if (item.year != null && item.year > 0) {
+            score += (2030 - item.year).coerceIn(0, 50)
+        }
+
+        // Tie-breaker rating bonus
         val ratingBonus = ((item.rating ?: 0.0) * 10).toInt().coerceIn(0, 100)
         score += ratingBonus
 

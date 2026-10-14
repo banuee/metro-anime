@@ -999,18 +999,11 @@ fun PlayerScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Text(
-                        text = "УСКОРЕНИЕ",
+                        text = "УСКОРЕНИЕ $lastBoostText",
                         fontFamily = MetroFonts.headline,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
                         color = Color.White,
-                    )
-                    Text(
-                        text = lastBoostText,
-                        fontFamily = MetroFonts.headline,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = scheme.accent,
                     )
                     Icon(
                         imageVector = Icons.Default.FastForward,

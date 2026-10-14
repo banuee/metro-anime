@@ -133,7 +133,7 @@ object ApiClient {
     }
 
     suspend fun getShikimoriDetails(shikimoriId: Long): AnimeTitle? = withContext(Dispatchers.IO) {
-        val domains = listOf("https://shikimori.one", "https://shikimori.io")
+        val domains = listOf("https://shikimori.io", "https://shikimori.one")
         for (base in domains) {
             val url = "$base/api/animes/$shikimoriId"
             val request = Request.Builder()
@@ -150,8 +150,8 @@ object ApiClient {
                     val imgObj = obj.getAsJsonObject("image")
                     val origImg = imgObj?.get("original")?.takeIf { !it.isJsonNull }?.asString
                     val poster = if (origImg != null) {
-                        if (origImg.startsWith("http")) origImg else "https://shikimori.one$origImg"
-                    } else "https://shikimori.one/system/animes/original/$shikimoriId.jpg"
+                        if (origImg.startsWith("http")) origImg else "https://shikimori.io$origImg"
+                    } else "https://shikimori.io/system/animes/original/$shikimoriId.jpg"
 
                     val descRaw = obj.get("description")?.takeIf { !it.isJsonNull }?.asString
                     val cleanDesc = descRaw?.replace(Regex("\\[/?(?:character|anime|person|manga|b|i|u|url|code|spoiler)[^\\]]*\\]"), "")?.trim()
@@ -207,7 +207,7 @@ object ApiClient {
             ""
         ).trim()
         val searchQuery = if (cleanQuery.isNotBlank()) cleanQuery else query
-        val domains = listOf("https://shikimori.one", "https://shikimori.io")
+        val domains = listOf("https://shikimori.io", "https://shikimori.one")
         for (base in domains) {
             val url = "$base/api/animes?search=${java.net.URLEncoder.encode(searchQuery, "UTF-8")}&limit=$limit"
             val request = Request.Builder()
@@ -229,8 +229,8 @@ object ApiClient {
                         val imgObj = obj.getAsJsonObject("image")
                         val origImg = imgObj?.get("original")?.takeIf { !it.isJsonNull }?.asString
                         val poster = if (origImg != null) {
-                            if (origImg.startsWith("http")) origImg else "https://shikimori.one$origImg"
-                        } else "https://shikimori.one/system/animes/original/$id.jpg"
+                            if (origImg.startsWith("http")) origImg else "https://shikimori.io$origImg"
+                        } else "https://shikimori.io/system/animes/original/$id.jpg"
 
                         val kind = obj.get("kind")?.takeIf { !it.isJsonNull }?.asString
                         val kindRu = when (kind?.lowercase()) {
@@ -306,16 +306,11 @@ object ApiClient {
                     val matRating = matData?.get("shikimori_rating")?.takeIf { !it.isJsonNull }?.asDouble
                         ?: matData?.get("kinopoisk_rating")?.takeIf { !it.isJsonNull }?.asDouble
 
-                    // Prefer clean title without [ТВ-1], [ТВ-2]
-                    val cleanTitle = if (!matTitle.isNullOrBlank() && !matTitle.contains("[тв-", ignoreCase = true)) {
-                        matTitle
-                    } else {
-                        rawTitleRu.replace(Regex("\\[тв-?\\d+\\]", RegexOption.IGNORE_CASE), "").trim()
-                    }
-
-                    val cleanKey = cleanTitle.lowercase().trim()
-                    if (seenTitles.contains(cleanKey)) continue
-                    seenTitles.add(cleanKey)
+                    // Preserve season indicators in titles (e.g. [ТВ-1], [ТВ-2], etc.)
+                    val displayTitle = rawTitleRu.trim()
+                    val uniqueKey = if (shikiId != null && shikiId > 0) "shiki_$shikiId" else displayTitle.lowercase()
+                    if (seenTitles.contains(uniqueKey)) continue
+                    seenTitles.add(uniqueKey)
 
                     val year = obj.get("year")?.takeIf { !it.isJsonNull }?.asInt
                         ?: matData?.get("year")?.takeIf { !it.isJsonNull }?.asInt
@@ -329,9 +324,9 @@ object ApiClient {
 
                     val screens = obj.getAsJsonArray("screenshots")
                     val poster = if (shikiId != null && shikiId > 0) {
-                        "https://shikimori.one/system/animes/original/$shikiId.jpg"
+                        "https://shikimori.io/system/animes/original/$shikiId.jpg"
                     } else if (!matPoster.isNullOrBlank()) {
-                        matPoster
+                        if (matPoster.startsWith("//")) "https:$matPoster" else matPoster
                     } else if (screens != null && screens.size() > 0) {
                         var p = screens[0].asString
                         if (p.startsWith("//")) p = "https:$p"
@@ -346,10 +341,12 @@ object ApiClient {
                         if (g.isJsonPrimitive) genresList.add(g.asString)
                     }
 
+                    val animeId = if (shikiId != null && shikiId > 0) "kodik_shiki_$shikiId" else "kodik_${obj.get("id")?.asString ?: rawTitleRu}"
+
                     list.add(
                         AnimeTitle(
-                            id = "kodik_${obj.get("id")?.asString ?: rawTitleRu}",
-                            titleRu = cleanTitle,
+                            id = animeId,
+                            titleRu = displayTitle,
                             titleOrig = titleOrig,
                             posterUrl = poster,
                             description = matDesc,
@@ -606,18 +603,33 @@ object ApiClient {
                     val episodesList = mutableListOf<AnimeEpisode>()
 
                     if (seasonsObj != null) {
-                        for (seasonKey in seasonsObj.keySet()) {
+                        val seasonKeys = seasonsObj.keySet().toList().sortedWith { s1, s2 ->
+                            val n1 = s1.toIntOrNull() ?: 999
+                            val n2 = s2.toIntOrNull() ?: 999
+                            val rank1 = if (n1 == 0) 10000 else n1
+                            val rank2 = if (n2 == 0) 10000 else n2
+                            rank1.compareTo(rank2)
+                        }
+
+                        val hasRegularSeason = seasonKeys.any { (it.toIntOrNull() ?: 0) > 0 }
+
+                        for (seasonKey in seasonKeys) {
+                            val seasonNum = seasonKey.toIntOrNull() ?: 1
+                            val isSpecialSeason = seasonNum == 0 && hasRegularSeason
                             val seasonData = seasonsObj.getAsJsonObject(seasonKey)
                             val epObj = seasonData?.getAsJsonObject("episodes")
                             if (epObj != null) {
-                                for (epKey in epObj.keySet()) {
+                                val epKeys = epObj.keySet().toList().sortedBy { it.toIntOrNull() ?: 0 }
+                                for (epKey in epKeys) {
                                     val epUrl = epObj.get(epKey)?.asString ?: continue
                                     val fullUrl = if (epUrl.startsWith("//")) "https:$epUrl" else epUrl
-                                    val ord = epKey.toIntOrNull() ?: 1
+                                    val rawOrd = epKey.toIntOrNull() ?: 1
+                                    val ord = if (isSpecialSeason) 1000 + rawOrd else rawOrd
+                                    val epName = if (isSpecialSeason) "Спешл $rawOrd" else "Серия $rawOrd"
                                     episodesList.add(
                                         AnimeEpisode(
                                             ordinal = ord,
-                                            name = "Серия $ord",
+                                            name = epName,
                                             // Store embed link in streams map temporarily
                                             hlsStreams = mapOf("embed" to fullUrl),
                                         )
@@ -642,9 +654,10 @@ object ApiClient {
 
                     if (episodesList.isNotEmpty()) {
                         episodesList.sortBy { it.ordinal }
+                        val resId = resObj.get("id")?.asString ?: transId
                         dubGroups.add(
                             DubbingGroup(
-                                id = "kodik_$transId",
+                                id = "kodik_${transId}_$resId",
                                 title = transTitle,
                                 source = AnimeSource.KODIK,
                                 episodes = episodesList,
