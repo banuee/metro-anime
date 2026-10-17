@@ -67,11 +67,30 @@ data class AnimeDetails(
     val rawDescription: String? = null,
 )
 
-data class ScheduleEntry(
-    val anime: AnimeTitle,
+data class AnimeSchedule(
+    val isOngoing: Boolean = false,
+    val status: String? = null,          // ongoing / released / anons
     val nextEpisode: Int? = null,
-    val publishedEpisode: Int? = null,
+    val nextEpisodeAt: Long? = null,     // epoch millis
+    val episodesTotal: Int? = null,
+    val episodesAired: Int? = null,
+    val broadcast: String? = null,
     val publishDay: Int? = null, // ISO: 1 = Понедельник .. 7 = Воскресенье
+) {
+    val statusRu: String
+        get() = when (status) {
+            "ongoing" -> "Онгоинг"
+            "anons" -> "Анонс"
+            "released" -> "Завершён"
+            else -> status ?: "Неизвестно"
+        }
+}
+
+data class EpisodeSubscription(
+    val anime: AnimeTitle,
+    val shikimoriId: Long? = null,
+    val lastAiredEpisode: Int = 0,
+    val nextEpisodeAt: Long? = null,
 )
 
 data class WatchProgress(

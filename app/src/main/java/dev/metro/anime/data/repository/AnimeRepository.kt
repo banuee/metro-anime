@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class AnimeRepository(context: Context) {
+    private val appContext: Context = context.applicationContext
     private val prefs: SharedPreferences =
         context.getSharedPreferences("metro_anime_prefs", Context.MODE_PRIVATE)
     private val gson = Gson()
@@ -21,9 +22,13 @@ class AnimeRepository(context: Context) {
     private val _history = MutableStateFlow<List<WatchProgress>>(emptyList())
     val history: StateFlow<List<WatchProgress>> = _history.asStateFlow()
 
+    private val _subscriptions = MutableStateFlow<List<EpisodeSubscription>>(emptyList())
+    val subscriptions: StateFlow<List<EpisodeSubscription>> = _subscriptions.asStateFlow()
+
     init {
         loadBookmarks()
         loadHistory()
+        loadSubscriptions()
     }
 
     suspend fun getLatestAnime(): List<AnimeTitle> {
@@ -53,8 +58,100 @@ class AnimeRepository(context: Context) {
             t.contains("новая озвучк")
     }
 
-    suspend fun getSchedule(): List<ScheduleEntry> {
-        return ApiClient.getAniLibriaSchedule()
+    suspend fun getAnimeSchedule(animeId: String, shikimoriId: Long?, titleRu: String?): AnimeSchedule? {
+        // 1. If we already know the Shikimori id — use it (works even when AniLibria doesn't have the title).
+        val knownShiki = shikimoriId?.takeIf { it > 0 }
+        if (knownShiki != null) {
+            val viaShiki = try {
+                ApiClient.getShikimoriSchedule(knownShiki)
+            } catch (_: Exception) {
+                null
+            }
+            if (viaShiki != null) return viaShiki
+        }
+
+        // 2. Fallback to AniLibria schedule for releases it actually hosts.
+        if (animeId.toLongOrNull() != null) {
+            val viaAni = try {
+                ApiClient.getAniLibriaScheduleFor(animeId)
+            } catch (_: Exception) {
+                null
+            }
+            if (viaAni != null) return viaAni
+        }
+
+        // 3. Last resort: resolve a Shikimori id by title.
+        if (!titleRu.isNullOrBlank()) {
+            val resolved = try {
+                ApiClient.searchShikimori(titleRu, limit = 5).firstOrNull()?.shikimoriId
+            } catch (_: Exception) {
+                null
+            }
+            if (resolved != null && resolved > 0) {
+                return try {
+                    ApiClient.getShikimoriSchedule(resolved)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
+        return null
+    }
+
+    // =========================================================================
+    // Episode release subscriptions (notifications)
+    // =========================================================================
+
+    private fun loadSubscriptions() {
+        val json = prefs.getString("episode_subscriptions", null) ?: return
+        try {
+            val type = object : TypeToken<List<EpisodeSubscription>>() {}.type
+            val list: List<EpisodeSubscription> = gson.fromJson(json, type) ?: emptyList()
+            _subscriptions.value = list.map { it.copy(anime = it.anime.sanitized()) }
+        } catch (_: Exception) {}
+    }
+
+    fun isEpisodeSubscribed(animeId: String): Boolean {
+        return _subscriptions.value.any { it.anime.id == animeId }
+    }
+
+    fun getAllSubscriptions(): List<EpisodeSubscription> = _subscriptions.value
+
+    fun toggleEpisodeSubscription(
+        anime: AnimeTitle,
+        shikimoriId: Long?,
+        schedule: AnimeSchedule?,
+    ): Boolean {
+        val current = _subscriptions.value.toMutableList()
+        val existing = current.indexOfFirst { it.anime.id == anime.id }
+        val nowSubscribed: Boolean
+        if (existing >= 0) {
+            current.removeAt(existing)
+            nowSubscribed = false
+        } else {
+            current.add(
+                0,
+                EpisodeSubscription(
+                    anime = anime.sanitized(),
+                    shikimoriId = shikimoriId?.takeIf { it > 0 },
+                    lastAiredEpisode = schedule?.episodesAired ?: 0,
+                    nextEpisodeAt = schedule?.nextEpisodeAt,
+                )
+            )
+            nowSubscribed = true
+        }
+        persistSubscriptions(current)
+        dev.metro.anime.data.EpisodeReminderManager.sync(appContext)
+        return nowSubscribed
+    }
+
+    fun replaceSubscriptions(list: List<EpisodeSubscription>) {
+        persistSubscriptions(list)
+    }
+
+    private fun persistSubscriptions(list: List<EpisodeSubscription>) {
+        _subscriptions.value = list.toList()
+        prefs.edit().putString("episode_subscriptions", gson.toJson(list)).apply()
     }
 
     suspend fun searchAnime(query: String): List<AnimeTitle> {

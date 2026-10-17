@@ -56,43 +56,92 @@ object ApiClient {
         }
     }
 
-    suspend fun getAniLibriaSchedule(): List<ScheduleEntry> = withContext(Dispatchers.IO) {
+    suspend fun getShikimoriSchedule(shikimoriId: Long): AnimeSchedule? = withContext(Dispatchers.IO) {
+        if (shikimoriId <= 0) return@withContext null
+        val domains = listOf("https://shikimori.io", "https://shikimori.one")
+        for (base in domains) {
+            val url = "$base/api/animes/$shikimoriId"
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "MetroAnime/1.0")
+                .build()
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use
+                    val body = response.body?.string() ?: return@use
+                    val obj = gson.fromJson(body, JsonObject::class.java) ?: return@use
+                    val status = obj.get("status")?.takeIf { !it.isJsonNull }?.asString
+                    val nextAt = obj.get("next_episode_at")?.takeIf { !it.isJsonNull }?.asString?.let { parseIsoToMillis(it) }
+                    val episodesTotal = obj.get("episodes")?.takeIf { !it.isJsonNull }?.asInt?.takeIf { it > 0 }
+                    val episodesAired = obj.get("episodes_aired")?.takeIf { !it.isJsonNull }?.asInt
+                    val broadcast = obj.get("broadcast")?.takeIf { !it.isJsonNull }?.asString
+
+                    return@withContext AnimeSchedule(
+                        isOngoing = status == "ongoing",
+                        status = status,
+                        nextEpisode = if (status == "ongoing" && episodesAired != null) episodesAired + 1 else null,
+                        nextEpisodeAt = nextAt,
+                        episodesTotal = episodesTotal,
+                        episodesAired = episodesAired,
+                        broadcast = broadcast,
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error fetching Shikimori schedule at $base", e)
+            }
+        }
+        null
+    }
+
+    suspend fun getAniLibriaScheduleFor(releaseId: String): AnimeSchedule? = withContext(Dispatchers.IO) {
+        val idNorm = releaseId.removePrefix("kodik_").trim()
+        if (idNorm.isBlank()) return@withContext null
         val url = "$ANILIBRIA_BASE/api/v1/anime/schedule/week"
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "MetroAnime/1.0")
             .build()
-
         try {
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext emptyList()
-                val body = response.body?.string() ?: return@withContext emptyList()
-                val jsonArray = gson.fromJson(body, JsonArray::class.java) ?: return@withContext emptyList()
-                val list = mutableListOf<ScheduleEntry>()
+                if (!response.isSuccessful) return@withContext null
+                val body = response.body?.string() ?: return@withContext null
+                val jsonArray = gson.fromJson(body, JsonArray::class.java) ?: return@withContext null
                 for (elem in jsonArray) {
                     val item = elem.asJsonObject
-                    val fullReleased = item.get("full_season_is_released")?.takeIf { !it.isJsonNull }?.asBoolean == true
-                    if (fullReleased) continue
                     val releaseObj = item.getAsJsonObject("release") ?: continue
+                    val relId = releaseObj.get("id")?.takeIf { !it.isJsonNull }?.asString ?: continue
+                    if (relId != idNorm) continue
                     val nextEp = item.get("next_release_episode_number")?.takeIf { !it.isJsonNull }?.asInt
                     val published = item.getAsJsonObject("published_release_episode")
                         ?.get("ordinal")?.takeIf { !it.isJsonNull }?.asInt
                     val publishDay = releaseObj.getAsJsonObject("publish_day")
                         ?.get("value")?.takeIf { !it.isJsonNull }?.asInt
-                    list.add(
-                        ScheduleEntry(
-                            anime = parseAniLibriaTitle(releaseObj),
-                            nextEpisode = nextEp,
-                            publishedEpisode = published,
-                            publishDay = publishDay,
-                        )
+                    val isOngoing = releaseObj.get("is_ongoing")?.takeIf { !it.isJsonNull }?.asBoolean ?: false
+                    return@withContext AnimeSchedule(
+                        isOngoing = isOngoing,
+                        status = if (isOngoing) "ongoing" else "released",
+                        nextEpisode = nextEp,
+                        nextEpisodeAt = null,
+                        episodesTotal = releaseObj.get("episodes_total")?.takeIf { !it.isJsonNull }?.asInt?.takeIf { it > 0 },
+                        episodesAired = published,
+                        publishDay = publishDay,
                     )
                 }
-                list
+                null
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error fetching AniLibria schedule", e)
-            emptyList()
+            Log.e(TAG, "Error fetching AniLibria schedule for release $releaseId", e)
+            null
+        }
+    }
+
+    private fun parseIsoToMillis(value: String): Long? = try {
+        java.time.OffsetDateTime.parse(value).toInstant().toEpochMilli()
+    } catch (_: Exception) {
+        try {
+            java.time.Instant.parse(value).toEpochMilli()
+        } catch (_: Exception) {
+            null
         }
     }
 

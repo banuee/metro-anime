@@ -58,9 +58,41 @@ class MainActivity : ComponentActivity() {
     private var openUpdatesRequest = mutableStateOf(false)
     private var activeScreenState = mutableStateOf<Screen>(Screen.Home)
 
+    companion object {
+        const val EXTRA_OPEN_ANIME = "open_anime"
+        const val EXTRA_ANIME_ID = "open_anime_id"
+        const val EXTRA_ANIME_TITLE = "open_anime_title"
+        const val EXTRA_ANIME_POSTER = "open_anime_poster"
+        const val EXTRA_ANIME_SHIKI = "open_anime_shikimori_id"
+        const val EXTRA_ANIME_SOURCE = "open_anime_source"
+    }
+
+    private fun tryOpenAnimeFromIntent(intent: Intent?): Boolean {
+        if (intent == null || !intent.getBooleanExtra(EXTRA_OPEN_ANIME, false)) return false
+        val id = intent.getStringExtra(EXTRA_ANIME_ID) ?: return false
+        val title = intent.getStringExtra(EXTRA_ANIME_TITLE).orEmpty()
+        val poster = intent.getStringExtra(EXTRA_ANIME_POSTER).orEmpty()
+        val shiki = intent.getLongExtra(EXTRA_ANIME_SHIKI, 0L).takeIf { it > 0 }
+        val source = intent.getStringExtra(EXTRA_ANIME_SOURCE)
+            ?.let { runCatching { AnimeSource.valueOf(it) }.getOrNull() }
+            ?: AnimeSource.ANILIBRIA
+        activeScreenState.value = Screen.Details(
+            AnimeTitle(
+                id = id,
+                titleRu = title,
+                posterUrl = poster,
+                shikimoriId = shiki,
+                source = source,
+                isOngoing = true,
+            )
+        )
+        return true
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (tryOpenAnimeFromIntent(intent)) return
         if (intent.getBooleanExtra("open_updates", false)) {
             openUpdatesRequest.value = true
         }
@@ -100,8 +132,9 @@ class MainActivity : ComponentActivity() {
         updateRepository = UpdateRepository(applicationContext)
         syncClient = dev.metro.anime.data.sync.MetroSyncClient(applicationContext, repository)
         dev.metro.anime.data.AutoUpdateNotificationHelper.createNotificationChannel(applicationContext)
+        dev.metro.anime.data.EpisodeNotificationHelper.createNotificationChannel(applicationContext)
 
-        if (intent?.getBooleanExtra("open_updates", false) == true) {
+        if (!tryOpenAnimeFromIntent(intent) && intent?.getBooleanExtra("open_updates", false) == true) {
             openUpdatesRequest.value = true
             activeScreenState.value = Screen.Settings
         }

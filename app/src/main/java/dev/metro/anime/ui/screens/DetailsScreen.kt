@@ -1,5 +1,10 @@
 package dev.metro.anime.ui.screens
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -14,22 +19,29 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import dev.metro.anime.data.EpisodeNotificationHelper
 import dev.metro.anime.data.model.*
 import dev.metro.anime.data.repository.AnimeRepository
 import dev.metro.anime.ui.components.MetroChip
@@ -59,6 +71,8 @@ fun DetailsScreen(
     var selectedDubIndex by remember { mutableIntStateOf(0) }
     var isAscending by remember { mutableStateOf(true) }
     var selectedRangeIndex by remember { mutableIntStateOf(0) }
+    var schedule by remember { mutableStateOf<AnimeSchedule?>(null) }
+    var scheduleExpanded by remember { mutableStateOf(false) }
     val bookmarks by repository.bookmarks.collectAsState()
     val isBookmarked = remember(bookmarks, anime.id) {
         bookmarks.any { it.id == anime.id }
@@ -67,6 +81,14 @@ fun DetailsScreen(
     val watchProgress = remember(history, anime.id) {
         history.find { it.anime.id == anime.id } ?: repository.getProgress(anime.id)
     }
+    val subscriptions by repository.subscriptions.collectAsState()
+    val isSubscribed = remember(subscriptions, anime.id) {
+        subscriptions.any { it.anime.id == anime.id }
+    }
+    val context = LocalContext.current
+    val notificationsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { }
 
     LaunchedEffect(anime.id) {
         isLoading = true
@@ -91,6 +113,17 @@ fun DetailsScreen(
             }
         }
         isLoading = false
+
+        // Release schedule (works even when AniLibria doesn't host the title)
+        schedule = try {
+            repository.getAnimeSchedule(
+                animeId = anime.id,
+                shikimoriId = loaded?.title?.shikimoriId ?: anime.shikimoriId,
+                titleRu = anime.titleRu,
+            )
+        } catch (_: Exception) {
+            null
+        }
     }
 
     Column(
@@ -277,6 +310,32 @@ fun DetailsScreen(
                                 color = scheme.text,
                             )
                         }
+                    }
+                }
+
+                // Release schedule (collapsible, show only for ongoing titles)
+                val currentSchedule = schedule
+                if (currentSchedule != null && currentSchedule.isOngoing) {
+                    item {
+                        AnimeScheduleSection(
+                            schedule = currentSchedule,
+                            expanded = scheduleExpanded,
+                            onToggleExpand = { scheduleExpanded = !scheduleExpanded },
+                            isSubscribed = isSubscribed,
+                            onToggleSubscription = {
+                                if (!isSubscribed &&
+                                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                    !EpisodeNotificationHelper.canPostNotifications(context)
+                                ) {
+                                    notificationsPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                                repository.toggleEpisodeSubscription(
+                                    anime = anime.sanitized(),
+                                    shikimoriId = details?.title?.shikimoriId ?: anime.shikimoriId,
+                                    schedule = currentSchedule,
+                                )
+                            },
+                        )
                     }
                 }
 
@@ -720,5 +779,259 @@ private fun formatMinSec(ms: Long): String {
     val min = totalSec / 60
     val sec = totalSec % 60
     return String.format("%02d:%02d", min, sec)
+}
+
+@Composable
+private fun AnimeScheduleSection(
+    schedule: AnimeSchedule,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit,
+    isSubscribed: Boolean,
+    onToggleSubscription: () -> Unit,
+) {
+    val scheme = LocalMetroScheme.current
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "schedule_chevron",
+    )
+
+    val summary = buildString {
+        if (schedule.nextEpisode != null) append("Серия ${schedule.nextEpisode}")
+        val whenText = scheduleWhenText(schedule)
+        if (whenText != null) {
+            if (isNotEmpty()) append(" • ")
+            append(whenText)
+        }
+    }.ifBlank { "Онгоинг" }
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        FrostedGlassBox(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MetroDimens.radiusSmall,
+            tint = Color.White.copy(alpha = 0.05f),
+            borderColor = if (expanded) scheme.accent.copy(alpha = 0.45f) else scheme.stroke,
+            borderWidth = MetroDimens.strokeWidth,
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .metroClickable(onClick = onToggleExpand)
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                            .background(scheme.accent.copy(alpha = 0.16f))
+                            .border(1.dp, scheme.accent.copy(alpha = 0.5f), RoundedCornerShape(MetroDimens.radiusSmall)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DateRange,
+                            contentDescription = null,
+                            tint = scheme.accent,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "РАСПИСАНИЕ ВЫХОДА",
+                            fontFamily = MetroFonts.headline,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 11.sp,
+                            letterSpacing = 1.2.sp,
+                            color = scheme.textDim,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = summary,
+                            fontFamily = MetroFonts.headline,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            color = scheme.text,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (expanded) "Свернуть" else "Развернуть",
+                        tint = scheme.accent,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .rotate(chevronRotation),
+                    )
+                }
+
+                AnimatedVisibility(visible = expanded) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(MetroDimens.strokeWidth)
+                                .background(scheme.stroke),
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(scheme.accent.copy(alpha = 0.16f))
+                                    .border(1.dp, scheme.accent.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                            ) {
+                                Text(
+                                    text = schedule.statusRu,
+                                    fontFamily = MetroFonts.text,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    color = scheme.accent,
+                                )
+                            }
+                            val progressText = scheduleProgressText(schedule)
+                            if (progressText != null) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = progressText,
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 11.sp,
+                                    color = scheme.textDim,
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = scheduleNextEpisodeLine(schedule),
+                            fontFamily = MetroFonts.headline,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp,
+                            color = scheme.text,
+                        )
+                        val whenLong = scheduleWhenLong(schedule)
+                        if (whenLong != null) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = whenLong,
+                                fontFamily = MetroFonts.text,
+                                fontSize = 12.sp,
+                                color = scheme.accent,
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Уведомлять о новых сериях",
+                                    fontFamily = MetroFonts.headline,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = scheme.text,
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Пришлём уведомление, когда выйдет новая серия",
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 11.sp,
+                                    color = scheme.textDim,
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Switch(
+                                checked = isSubscribed,
+                                onCheckedChange = { onToggleSubscription() },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = scheme.accent,
+                                    uncheckedThumbColor = Color.White.copy(alpha = 0.85f),
+                                    uncheckedTrackColor = Color.White.copy(alpha = 0.15f),
+                                    uncheckedBorderColor = Color.White.copy(alpha = 0.25f),
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun scheduleNextEpisodeLine(schedule: AnimeSchedule): String {
+    val ep = schedule.nextEpisode
+    return when {
+        ep != null -> "Следующая серия: $ep"
+        schedule.status == "anons" -> "Премьера ожидается"
+        else -> "Информация о серии уточняется"
+    }
+}
+
+private fun scheduleWhenText(schedule: AnimeSchedule): String? {
+    schedule.nextEpisodeAt?.let { return scheduleShortDate(it) }
+    schedule.publishDay?.let { return scheduleWeekdayRu(it) }
+    return null
+}
+
+private fun scheduleWhenLong(schedule: AnimeSchedule): String? {
+    val at = schedule.nextEpisodeAt
+    if (at != null) {
+        val countdown = scheduleCountdown(at)
+        return if (countdown != null) "${scheduleFullDate(at)} • $countdown" else scheduleFullDate(at)
+    }
+    schedule.publishDay?.let { return "${scheduleWeekdayRu(it)} • время уточняется" }
+    return null
+}
+
+private fun scheduleProgressText(schedule: AnimeSchedule): String? {
+    val aired = schedule.episodesAired ?: return null
+    val total = schedule.episodesTotal
+    return if (total != null && total > 0) {
+        "Вышло $aired из $total серий"
+    } else {
+        "Вышло серий: $aired"
+    }
+}
+
+private fun scheduleShortDate(ms: Long): String =
+    java.text.SimpleDateFormat("d MMM, HH:mm", java.util.Locale("ru")).format(java.util.Date(ms))
+
+private fun scheduleFullDate(ms: Long): String =
+    java.text.SimpleDateFormat("d MMMM, EEEE, HH:mm", java.util.Locale("ru")).format(java.util.Date(ms))
+
+private fun scheduleCountdown(ms: Long): String? {
+    val diff = ms - System.currentTimeMillis()
+    if (diff <= 0) return null
+    val days = diff / 86_400_000L
+    val hours = (diff % 86_400_000L) / 3_600_000L
+    val minutes = (diff % 3_600_000L) / 60_000L
+    return when {
+        days > 0 -> "через $days д. $hours ч."
+        hours > 0 -> "через $hours ч. $minutes мин."
+        else -> "через $minutes мин."
+    }
+}
+
+private fun scheduleWeekdayRu(isoDay: Int): String = when (isoDay) {
+    1 -> "Понедельник"
+    2 -> "Вторник"
+    3 -> "Среда"
+    4 -> "Четверг"
+    5 -> "Пятница"
+    6 -> "Суббота"
+    else -> "Воскресенье"
 }
 
