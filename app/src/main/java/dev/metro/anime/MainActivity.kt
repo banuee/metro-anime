@@ -24,9 +24,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import dev.metro.anime.data.AutoUpdateManager
 import dev.metro.anime.data.UpdateRepository
+import dev.metro.anime.data.download.DownloadManager
 import dev.metro.anime.data.model.AnimeEpisode
 import dev.metro.anime.data.model.AnimeSource
 import dev.metro.anime.data.model.AnimeTitle
+import dev.metro.anime.data.model.OFFLINE_STREAM_KEY
 import dev.metro.anime.data.repository.AnimeRepository
 import dev.metro.anime.data.settings.MetroSettingsRepository
 import dev.metro.anime.ui.screens.DetailsScreen
@@ -237,6 +239,28 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onOpenSettings = {
                                         currentScreen = Screen.Settings
+                                    },
+                                    onPlayDownloaded = { downloaded ->
+                                        val downloadedEps = DownloadManager.downloadedFor(downloaded.anime.id)
+                                            .sortedBy { it.episodeOrdinal }
+                                            .map { rec ->
+                                                AnimeEpisode(
+                                                    ordinal = rec.episodeOrdinal,
+                                                    name = rec.episodeName ?: "Серия ${rec.episodeOrdinal}",
+                                                    hlsStreams = mapOf(OFFLINE_STREAM_KEY to rec.fileUri),
+                                                    durationSec = rec.durationSec,
+                                                )
+                                            }
+                                        val target = downloadedEps.firstOrNull { it.ordinal == downloaded.episodeOrdinal }
+                                        if (target != null) {
+                                            currentScreen = Screen.Player(
+                                                anime = downloaded.anime,
+                                                episode = target,
+                                                source = downloaded.safeSource,
+                                                dubbingTitle = downloaded.dubbingTitle,
+                                                allEpisodes = downloadedEps,
+                                            )
+                                        }
                                     },
                                 )
                             }

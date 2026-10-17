@@ -18,6 +18,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import dev.metro.anime.data.UpdateRepository
+import dev.metro.anime.data.download.DownloadManager
 import dev.metro.anime.data.model.*
 import dev.metro.anime.data.repository.AnimeRepository
 import dev.metro.anime.data.settings.MetroSettingsRepository
@@ -53,6 +56,7 @@ import kotlinx.coroutines.launch
 enum class HomeTab(val label: String, val pivotLabel: String) {
     LATEST("Свежие серии", "свежее"),
     HISTORY("История", "история"),
+    DOWNLOADS("Скачано", "скачано"),
     SEARCH("Поиск", "поиск"),
     BOOKMARKS("Избранное", "избранное"),
     SETTINGS("Параметры", "параметры"),
@@ -66,6 +70,7 @@ fun HomeScreen(
     syncClient: MetroSyncClient? = null,
     onAnimeClick: (AnimeTitle) -> Unit,
     onOpenSettings: () -> Unit,
+    onPlayDownloaded: (DownloadedEpisode) -> Unit = {},
     usePivotHeader: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
@@ -89,6 +94,8 @@ fun HomeScreen(
     var searchResults by remember { mutableStateOf<List<AnimeTitle>>(emptyList()) }
     val bookmarks by repository.bookmarks.collectAsState()
     val history by repository.history.collectAsState()
+    val downloadedEpisodes by DownloadManager.downloads.collectAsState()
+    val downloadTasks by DownloadManager.tasks.collectAsState()
 
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -238,6 +245,14 @@ fun HomeScreen(
                         onDelete = { repository.removeHistoryItem(it) },
                     )
 
+                    HomeTab.DOWNLOADS -> DownloadsTabContent(
+                        downloads = downloadedEpisodes,
+                        tasks = downloadTasks,
+                        onPlay = onPlayDownloaded,
+                        onDelete = { DownloadManager.removeDownload(it.anime.id, it.episodeOrdinal) },
+                        onDeleteAnime = { DownloadManager.removeAnimeDownloads(it) },
+                    )
+
                     HomeTab.SEARCH -> SearchTabContent(
                         includeSearchBar = true,
                         query = searchQuery,
@@ -336,6 +351,14 @@ fun HomeScreen(
                         history = history,
                         onAnimeClick = onAnimeClick,
                         onDelete = { repository.removeHistoryItem(it) },
+                    )
+
+                    HomeTab.DOWNLOADS -> DownloadsTabContent(
+                        downloads = downloadedEpisodes,
+                        tasks = downloadTasks,
+                        onPlay = onPlayDownloaded,
+                        onDelete = { DownloadManager.removeDownload(it.anime.id, it.episodeOrdinal) },
+                        onDeleteAnime = { DownloadManager.removeAnimeDownloads(it) },
                     )
 
                     HomeTab.SEARCH -> SearchTabContent(
@@ -529,6 +552,305 @@ private fun HistoryTabContent(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun DownloadsTabContent(
+    downloads: List<DownloadedEpisode>,
+    tasks: List<DownloadTask>,
+    onPlay: (DownloadedEpisode) -> Unit,
+    onDelete: (DownloadedEpisode) -> Unit,
+    onDeleteAnime: (String) -> Unit,
+) {
+    val scheme = LocalMetroScheme.current
+    val activeTasks = tasks.filter { it.status.isActive }
+
+    if (downloads.isEmpty() && activeTasks.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.DownloadDone,
+                    contentDescription = null,
+                    tint = scheme.textDim,
+                    modifier = Modifier.size(42.dp),
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "Скачанных серий пока нет",
+                    fontFamily = MetroFonts.text,
+                    fontSize = 14.sp,
+                    color = scheme.textDim,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Нажмите кнопку загрузки рядом с серией\nв карточке аниме, чтобы смотреть её офлайн",
+                    fontFamily = MetroFonts.text,
+                    fontSize = 12.sp,
+                    color = scheme.textDim.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    } else {
+        LazyColumn(
+            contentPadding = PaddingValues(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            if (activeTasks.isNotEmpty()) {
+                item(key = "active_downloads") {
+                    ActiveDownloadsCard(tasks = activeTasks)
+                }
+            }
+            val grouped = downloads.groupBy { it.anime.id }
+            items(grouped.values.toList(), key = { list -> list.first().anime.id }) { episodes ->
+                DownloadAnimeCard(
+                    anime = episodes.first().anime,
+                    episodes = episodes.sortedBy { it.episodeOrdinal },
+                    onPlay = onPlay,
+                    onDelete = onDelete,
+                    onDeleteAnime = onDeleteAnime,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveDownloadsCard(tasks: List<DownloadTask>) {
+    val scheme = LocalMetroScheme.current
+    FrostedGlassBox(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MetroDimens.radiusSmall,
+        tint = scheme.accent.copy(alpha = 0.08f),
+        borderColor = scheme.accent.copy(alpha = 0.35f),
+        borderWidth = MetroDimens.strokeWidth,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+        ) {
+            Text(
+                text = "Загрузки",
+                fontFamily = MetroFonts.headline,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                color = scheme.accent,
+            )
+            tasks.forEach { task ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "${task.anime.titleRu} — серия ${task.episodeOrdinal}",
+                    fontFamily = MetroFonts.text,
+                    fontSize = 12.sp,
+                    color = scheme.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                val fraction = if (task.status == DownloadStatus.REMUXING) 1f else task.progress
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(Color.White.copy(alpha = 0.12f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                            .fillMaxHeight()
+                            .background(scheme.accent)
+                    )
+                }
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = if (task.status == DownloadStatus.REMUXING) {
+                        "Обработка…"
+                    } else {
+                        "${(task.progress * 100).toInt()}% • ${formatBytes(task.downloadedBytes)} из ${formatBytes(task.totalBytes)}"
+                    },
+                    fontFamily = MetroFonts.text,
+                    fontSize = 10.sp,
+                    color = scheme.textDim,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DownloadAnimeCard(
+    anime: AnimeTitle,
+    episodes: List<DownloadedEpisode>,
+    onPlay: (DownloadedEpisode) -> Unit,
+    onDelete: (DownloadedEpisode) -> Unit,
+    onDeleteAnime: (String) -> Unit,
+) {
+    val scheme = LocalMetroScheme.current
+    val totalSize = episodes.sumOf { it.sizeBytes }
+
+    FrostedGlassBox(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MetroDimens.radiusSmall,
+        tint = Color.White.copy(alpha = 0.05f),
+        borderColor = scheme.stroke,
+        borderWidth = MetroDimens.strokeWidth,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val isSerost = dev.metro.anime.ui.theme.LocalSerostMode.current
+                val posterModel: Any? = if (isSerost) dev.metro.anime.R.drawable.serost_cat else anime.posterUrl
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(posterModel)
+                        .crossfade(true)
+                        .size(160, 220)
+                        .build(),
+                    contentDescription = anime.titleRu,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .width(48.dp)
+                        .height(66.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .border(1.dp, scheme.strokeStrong, RoundedCornerShape(4.dp)),
+                )
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = anime.titleRu,
+                        fontFamily = MetroFonts.headline,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        color = scheme.text,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "${episodes.size} ${episodesWord(episodes.size)} • ${formatBytes(totalSize)}",
+                        fontFamily = MetroFonts.text,
+                        fontSize = 11.sp,
+                        color = scheme.accent,
+                    )
+                    if (episodes.first().dubbingTitle.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = episodes.first().dubbingTitle,
+                            fontFamily = MetroFonts.text,
+                            fontSize = 10.sp,
+                            color = scheme.textDim,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                MetroIconButton(
+                    icon = Icons.Default.Delete,
+                    contentDescription = "Удалить все серии",
+                    onClick = { onDeleteAnime(anime.id) },
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(episodes, key = { it.episodeOrdinal }) { ep ->
+                    DownloadEpisodeChip(
+                        episode = ep,
+                        onPlay = { onPlay(ep) },
+                        onDelete = { onDelete(ep) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DownloadEpisodeChip(
+    episode: DownloadedEpisode,
+    onPlay: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val scheme = LocalMetroScheme.current
+    val qualityText = if (episode.quality.toIntOrNull() != null) "${episode.quality}p" else episode.quality
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+            .background(scheme.accent.copy(alpha = 0.10f))
+            .border(1.dp, scheme.accent.copy(alpha = 0.40f), RoundedCornerShape(MetroDimens.radiusSmall))
+            .metroClickable(onClick = onPlay)
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Default.PlayArrow,
+            contentDescription = null,
+            tint = scheme.accent,
+            modifier = Modifier.size(14.dp),
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Column {
+            Text(
+                text = "Серия ${episode.episodeOrdinal}",
+                fontFamily = MetroFonts.text,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 11.sp,
+                color = scheme.text,
+            )
+            val sizeText = if (episode.sizeBytes > 0) " • ${formatBytes(episode.sizeBytes)}" else ""
+            Text(
+                text = "$qualityText$sizeText",
+                fontFamily = MetroFonts.text,
+                fontSize = 9.sp,
+                color = scheme.textDim,
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Удалить серию",
+            tint = scheme.textDim,
+            modifier = Modifier
+                .size(14.dp)
+                .metroClickable(onClick = onDelete),
+        )
+    }
+}
+
+private fun episodesWord(count: Int): String {
+    val mod10 = count % 10
+    val mod100 = count % 100
+    return when {
+        mod10 == 1 && mod100 != 11 -> "серия"
+        mod10 in 2..4 && mod100 !in 12..14 -> "серии"
+        else -> "серий"
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes <= 0) return "0 МБ"
+    val kb = bytes / 1024.0
+    val mb = kb / 1024.0
+    val gb = mb / 1024.0
+    return when {
+        gb >= 1.0 -> String.format("%.1f ГБ", gb).replace('.', ',')
+        mb >= 1.0 -> String.format("%.0f МБ", mb)
+        else -> String.format("%.0f КБ", kb)
     }
 }
 

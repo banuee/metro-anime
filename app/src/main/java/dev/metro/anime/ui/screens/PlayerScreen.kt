@@ -720,6 +720,17 @@ fun PlayerScreen(
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
         try {
+            val offline = if (dev.metro.anime.data.download.DownloadManager.isInitialized()) {
+                dev.metro.anime.data.download.DownloadManager.getDownloaded(currentAnime.id, episode.ordinal)
+            } else null
+            if (offline != null && offline.fileUri.isNotBlank()) {
+                streamsState = Pair(
+                    mapOf(dev.metro.anime.data.model.OFFLINE_STREAM_KEY to offline.fileUri),
+                    dev.metro.anime.data.model.OFFLINE_STREAM_KEY,
+                )
+                isResolvingStreams = false
+                return@LaunchedEffect
+            }
             val resolved = repository.resolveEpisodeStream(episode, source)
             if (resolved.isNotEmpty()) {
                 val quality = when {

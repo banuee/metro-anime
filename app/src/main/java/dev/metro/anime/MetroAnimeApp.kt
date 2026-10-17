@@ -46,6 +46,7 @@ class MetroAnimeApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        dev.metro.anime.data.download.DownloadManager.init(this)
         // Auto-clean any accumulated update APKs on startup
         cleanUpdateApks()
     }

@@ -1,5 +1,7 @@
 package dev.metro.anime.data.model
 
+const val OFFLINE_STREAM_KEY = "Офлайн"
+
 enum class AnimeSource(val label: String) {
     ANILIBRIA("AniLibria"),
     KODIK("Kodik"),
@@ -92,6 +94,54 @@ data class EpisodeSubscription(
     val lastAiredEpisode: Int = 0,
     val nextEpisodeAt: Long? = null,
 )
+
+enum class DownloadStatus {
+    QUEUED,
+    DOWNLOADING,
+    REMUXING,
+    COMPLETED,
+    FAILED,
+    CANCELLED,
+}
+
+val DownloadStatus.isActive: Boolean
+    get() = this == DownloadStatus.QUEUED || this == DownloadStatus.DOWNLOADING || this == DownloadStatus.REMUXING
+
+data class DownloadedEpisode(
+    val anime: AnimeTitle,
+    val episodeOrdinal: Int,
+    val episodeName: String? = null,
+    val dubbingTitle: String = "",
+    val source: AnimeSource = AnimeSource.ANILIBRIA,
+    val quality: String = "720",
+    val fileUri: String = "",
+    val sizeBytes: Long = 0L,
+    val durationSec: Int? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+) {
+    val safeSource: AnimeSource
+        get() = source ?: AnimeSource.ANILIBRIA
+}
+
+data class DownloadTask(
+    val id: String,
+    val anime: AnimeTitle,
+    val episodeOrdinal: Int,
+    val episodeName: String? = null,
+    val dubbingTitle: String = "",
+    val source: AnimeSource = AnimeSource.ANILIBRIA,
+    val quality: String = "720",
+    val streamUrl: String = "",
+    val status: DownloadStatus = DownloadStatus.QUEUED,
+    val progress: Float = 0f,
+    val downloadedBytes: Long = 0L,
+    val totalBytes: Long = 0L,
+    val error: String? = null,
+    val durationSec: Int? = null,
+) {
+    val safeSource: AnimeSource
+        get() = source ?: AnimeSource.ANILIBRIA
+}
 
 data class WatchProgress(
     val anime: AnimeTitle,

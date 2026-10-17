@@ -1,6 +1,7 @@
 package dev.metro.anime.ui.screens
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,18 +16,25 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,8 +48,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import dev.metro.anime.data.EpisodeNotificationHelper
+import dev.metro.anime.data.download.DownloadManager
 import dev.metro.anime.data.model.*
 import dev.metro.anime.data.repository.AnimeRepository
 import dev.metro.anime.ui.components.MetroChip
@@ -73,6 +83,17 @@ fun DetailsScreen(
     var selectedRangeIndex by remember { mutableIntStateOf(0) }
     var schedule by remember { mutableStateOf<AnimeSchedule?>(null) }
     var scheduleExpanded by remember { mutableStateOf(false) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedEpisodes by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var downloadPrompt by remember { mutableStateOf<DownloadPrompt?>(null) }
+    val downloadTasks by DownloadManager.tasks.collectAsState()
+    val downloadedEpisodes by DownloadManager.downloads.collectAsState()
+    val tasksByOrdinal = remember(downloadTasks, anime.id) {
+        downloadTasks.filter { it.anime.id == anime.id }.associateBy { it.episodeOrdinal }
+    }
+    val downloadedByOrdinal = remember(downloadedEpisodes, anime.id) {
+        downloadedEpisodes.filter { it.anime.id == anime.id }.associateBy { it.episodeOrdinal }
+    }
     val bookmarks by repository.bookmarks.collectAsState()
     val isBookmarked = remember(bookmarks, anime.id) {
         bookmarks.any { it.id == anime.id }
@@ -89,6 +110,24 @@ fun DetailsScreen(
     val notificationsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { }
+    var pendingDownloadAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val action = pendingDownloadAction
+        pendingDownloadAction = null
+        if (granted) action?.invoke()
+    }
+    fun withStorageAccess(action: () -> Unit) {
+        val granted = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            action()
+        } else {
+            pendingDownloadAction = action
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+    }
 
     LaunchedEffect(anime.id) {
         isLoading = true
@@ -124,6 +163,107 @@ fun DetailsScreen(
         } catch (_: Exception) {
             null
         }
+    }
+
+    fun requestDownload(episode: AnimeEpisode, epSource: AnimeSource, dubTitle: String) {
+        withStorageAccess {
+            scope.launch {
+                val streams = try {
+                    repository.resolveEpisodeStream(episode, epSource)
+                } catch (_: Exception) {
+                    emptyMap()
+                }
+                val qualities = streams.filterKeys { it != OFFLINE_STREAM_KEY }
+                if (qualities.isEmpty()) return@launch
+                if (qualities.size == 1) {
+                    val (q, url) = qualities.entries.first()
+                    DownloadManager.enqueue(anime.sanitized(), episode, dubTitle, epSource, q, url, episode.durationSec)
+                } else {
+                    downloadPrompt = DownloadPrompt(episode, epSource, dubTitle, qualities)
+                }
+            }
+        }
+    }
+
+    fun downloadSelected(epSource: AnimeSource, dubTitle: String, list: List<AnimeEpisode>) {
+        withStorageAccess {
+            scope.launch {
+                for (ep in list) {
+                    val streams = try {
+                        repository.resolveEpisodeStream(ep, epSource)
+                    } catch (_: Exception) {
+                        emptyMap()
+                    }
+                    val q = listOf("1080", "720", "480").firstOrNull { streams.containsKey(it) }
+                        ?: streams.keys.firstOrNull { it != OFFLINE_STREAM_KEY }
+                        ?: continue
+                    DownloadManager.enqueue(anime.sanitized(), ep, dubTitle, epSource, q, streams.getValue(q), ep.durationSec)
+                }
+                selectionMode = false
+                selectedEpisodes = emptySet()
+            }
+        }
+    }
+
+    downloadPrompt?.let { prompt ->
+        AlertDialog(
+            onDismissRequest = { downloadPrompt = null },
+            containerColor = Color(0xFF17171C),
+            titleContentColor = scheme.text,
+            textContentColor = scheme.text,
+            title = {
+                Text(
+                    text = "Качество загрузки",
+                    fontFamily = MetroFonts.headline,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Серия ${prompt.episode.ordinal}",
+                        fontFamily = MetroFonts.text,
+                        fontSize = 12.sp,
+                        color = scheme.textDim,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    prompt.qualities.keys.sortedDescending().forEach { quality ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                                .metroClickable {
+                                    DownloadManager.enqueue(
+                                        anime = anime.sanitized(),
+                                        episode = prompt.episode,
+                                        dubbingTitle = prompt.dubbingTitle,
+                                        source = prompt.source,
+                                        quality = quality,
+                                        streamUrl = prompt.qualities.getValue(quality),
+                                        durationSec = prompt.episode.durationSec,
+                                    )
+                                    downloadPrompt = null
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                        ) {
+                            Text(
+                                text = qualityLabel(quality),
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp,
+                                color = scheme.text,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { downloadPrompt = null }) {
+                    Text("Отмена", color = scheme.accent)
+                }
+            },
+        )
     }
 
     Column(
@@ -534,20 +674,68 @@ fun DetailsScreen(
                         )
 
                         // Order toggle button
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                                    .background(if (selectionMode) scheme.accent else scheme.glass)
+                                    .border(1.dp, if (selectionMode) scheme.accent else scheme.stroke, RoundedCornerShape(MetroDimens.radiusSmall))
+                                    .metroClickable {
+                                        selectionMode = !selectionMode
+                                        selectedEpisodes = emptySet()
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                            ) {
+                                Text(
+                                    text = if (selectionMode) "Отмена" else "Выбрать",
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (selectionMode) Color.White else scheme.accent,
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                                    .background(scheme.glass)
+                                    .border(1.dp, scheme.stroke, RoundedCornerShape(MetroDimens.radiusSmall))
+                                    .metroClickable { isAscending = !isAscending }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                            ) {
+                                Text(
+                                    text = if (isAscending) "1 → ${episodes.size}" else "${episodes.size} → 1",
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = scheme.accent,
+                                )
+                            }
+                        }
+                    }
+
+                    if (selectionMode) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         Box(
                             modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
                                 .clip(RoundedCornerShape(MetroDimens.radiusSmall))
-                                .background(scheme.glass)
-                                .border(1.dp, scheme.stroke, RoundedCornerShape(MetroDimens.radiusSmall))
-                                .metroClickable { isAscending = !isAscending }
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                .background(if (selectedEpisodes.isNotEmpty()) scheme.accent else scheme.glass)
+                                .border(1.dp, if (selectedEpisodes.isNotEmpty()) scheme.accent else scheme.stroke, RoundedCornerShape(MetroDimens.radiusSmall))
+                                .metroClickable(enabled = selectedEpisodes.isNotEmpty()) {
+                                    val chosen = episodes.filter { selectedEpisodes.contains(it.ordinal) }
+                                    downloadSelected(activeDub?.source ?: AnimeSource.ANILIBRIA, activeDub?.title ?: "", chosen)
+                                }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = if (isAscending) "1 → ${episodes.size}" else "${episodes.size} → 1",
-                                fontFamily = MetroFonts.text,
-                                fontSize = 12.sp,
+                                text = if (selectedEpisodes.isEmpty()) "Выберите серии для скачивания" else "Скачать выбранные (${selectedEpisodes.size})",
+                                fontFamily = MetroFonts.headline,
                                 fontWeight = FontWeight.SemiBold,
-                                color = scheme.accent,
+                                fontSize = 13.sp,
+                                color = if (selectedEpisodes.isNotEmpty()) Color.White else scheme.textDim,
                             )
                         }
                     }
@@ -622,21 +810,40 @@ fun DetailsScreen(
                     }
                 } else {
                     itemsIndexed(displayedEpisodes, key = { index, episode -> "${episode.ordinal}_${index}_${episode.name ?: ""}" }) { _, episode ->
+                        val activeTask = tasksByOrdinal[episode.ordinal]?.takeIf { it.status.isActive }
                         EpisodeItemRow(
                             episode = episode,
                             watchProgress = watchProgress,
+                            selectionMode = selectionMode,
+                            isSelected = selectedEpisodes.contains(episode.ordinal),
+                            downloaded = downloadedByOrdinal.containsKey(episode.ordinal),
+                            activeTask = activeTask,
                             onClick = {
-                                val startPos = if (watchProgress?.episodeOrdinal == episode.ordinal) {
-                                    watchProgress.positionMs
-                                } else 0L
-                                onPlayEpisode(
-                                    episode,
-                                    activeDub?.source ?: AnimeSource.ANILIBRIA,
-                                    anime.sanitized(),
-                                    activeDub?.title ?: "",
-                                    startPos,
-                                    episodes,
-                                )
+                                if (selectionMode) {
+                                    selectedEpisodes = if (selectedEpisodes.contains(episode.ordinal)) {
+                                        selectedEpisodes - episode.ordinal
+                                    } else {
+                                        selectedEpisodes + episode.ordinal
+                                    }
+                                } else {
+                                    val startPos = if (watchProgress?.episodeOrdinal == episode.ordinal) {
+                                        watchProgress.positionMs
+                                    } else 0L
+                                    onPlayEpisode(
+                                        episode,
+                                        activeDub?.source ?: AnimeSource.ANILIBRIA,
+                                        anime.sanitized(),
+                                        activeDub?.title ?: "",
+                                        startPos,
+                                        episodes,
+                                    )
+                                }
+                            },
+                            onDownloadClick = {
+                                requestDownload(episode, activeDub?.source ?: AnimeSource.ANILIBRIA, activeDub?.title ?: "")
+                            },
+                            onCancelDownload = {
+                                DownloadManager.cancel(anime.id, episode.ordinal)
                             },
                         )
                     }
@@ -652,6 +859,12 @@ fun EpisodeItemRow(
     watchProgress: WatchProgress? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    selectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    downloaded: Boolean = false,
+    activeTask: DownloadTask? = null,
+    onDownloadClick: (() -> Unit)? = null,
+    onCancelDownload: (() -> Unit)? = null,
 ) {
     val scheme = LocalMetroScheme.current
     val isCurrentWatched = watchProgress != null && watchProgress.episodeOrdinal == episode.ordinal
@@ -744,10 +957,71 @@ fun EpisodeItemRow(
                     }
                 }
 
-                if (episode.durationSec != null && episode.durationSec > 0) {
-                    val mins = episode.durationSec / 60
-                    Text(
-                        text = "$mins мин.",
+                val mins = if (episode.durationSec != null && episode.durationSec > 0) {
+                    "${episode.durationSec / 60} мин."
+                } else {
+                    null
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                when {
+                    selectionMode -> Icon(
+                        imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                        contentDescription = null,
+                        tint = if (isSelected) scheme.accent else scheme.textDim,
+                        modifier = Modifier.size(24.dp),
+                    )
+
+                    activeTask != null -> DownloadProgressBadge(activeTask = activeTask, onCancel = onCancelDownload)
+
+                    downloaded -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.DownloadDone,
+                            contentDescription = "Скачано",
+                            tint = scheme.accent,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        if (mins != null) {
+                            Text(
+                                text = "офлайн",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 9.sp,
+                                color = scheme.accent,
+                            )
+                        }
+                    }
+
+                    onDownloadClick != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                                .background(scheme.glass)
+                                .border(1.dp, scheme.stroke, RoundedCornerShape(MetroDimens.radiusSmall))
+                                .metroClickable(onClick = onDownloadClick),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Скачать серию",
+                                tint = scheme.accent,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        if (mins != null) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = mins,
+                                fontFamily = MetroFonts.text,
+                                fontSize = 10.sp,
+                                color = scheme.textDim,
+                            )
+                        }
+                    }
+
+                    mins != null -> Text(
+                        text = mins,
                         fontFamily = MetroFonts.text,
                         fontSize = 11.sp,
                         color = scheme.textDim,
@@ -773,6 +1047,60 @@ fun EpisodeItemRow(
         }
     }
 }
+
+@Composable
+private fun DownloadProgressBadge(activeTask: DownloadTask, onCancel: (() -> Unit)?) {
+    val scheme = LocalMetroScheme.current
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .metroClickable(enabled = onCancel != null) { onCancel?.invoke() },
+        contentAlignment = Alignment.Center,
+    ) {
+        when (activeTask.status) {
+            DownloadStatus.DOWNLOADING -> {
+                CircularProgressIndicator(
+                    progress = { activeTask.progress },
+                    color = scheme.accent,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(30.dp),
+                )
+                Text(
+                    text = "${(activeTask.progress * 100).toInt()}",
+                    fontFamily = MetroFonts.text,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = scheme.text,
+                )
+            }
+            DownloadStatus.REMUXING -> {
+                CircularProgressIndicator(
+                    color = scheme.accent,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            else -> {
+                CircularProgressIndicator(
+                    color = scheme.textDim,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+    }
+}
+
+private data class DownloadPrompt(
+    val episode: AnimeEpisode,
+    val source: AnimeSource,
+    val dubbingTitle: String,
+    val qualities: Map<String, String>,
+)
+
+private fun qualityLabel(quality: String): String =
+    if (quality.toIntOrNull() != null) "${quality}p" else quality
 
 private fun formatMinSec(ms: Long): String {
     val totalSec = ms / 1000

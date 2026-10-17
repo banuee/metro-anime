@@ -5,10 +5,14 @@ import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dev.metro.anime.data.api.ApiClient
+import dev.metro.anime.data.download.DownloadManager
 import dev.metro.anime.data.model.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
+import java.io.File
 
 class AnimeRepository(context: Context) {
     private val appContext: Context = context.applicationContext
@@ -372,7 +376,8 @@ class AnimeRepository(context: Context) {
                 rawDescription = resolvedDesc,
             )
         } else {
-            val aniDetails = ApiClient.getAniLibriaDetails(idOrAlias) ?: return null
+            val aniDetails = ApiClient.getAniLibriaDetails(idOrAlias)
+                ?: return cachedDetailsOrNull(idOrAlias)?.let { withOfflineDubs(it) }
             var enrichedTitle = aniDetails.title
             var enrichedDesc = aniDetails.rawDescription
             val effectiveShiki = shikimoriId ?: aniDetails.title.shikimoriId
@@ -442,7 +447,78 @@ class AnimeRepository(context: Context) {
             }
         )
 
-        return details.copy(dubbings = sortedDubs)
+        val result = details.copy(dubbings = sortedDubs)
+        if (result.dubbings.isNotEmpty()) {
+            cacheDetails(idOrAlias, result)
+        } else {
+            val cached = cachedDetailsOrNull(idOrAlias)
+            if (cached != null) return withOfflineDubs(cached)
+        }
+        return withOfflineDubs(result)
+    }
+
+    // =========================================================================
+    // Offline downloaded episodes + details cache
+    // =========================================================================
+
+    private fun withOfflineDubs(details: AnimeDetails): AnimeDetails {
+        if (!DownloadManager.isInitialized()) return details
+        val offline = DownloadManager.downloadedFor(details.title.id)
+        if (offline.isEmpty()) return details
+        val episodes = offline.map { rec ->
+            AnimeEpisode(
+                ordinal = rec.episodeOrdinal,
+                name = rec.episodeName ?: "Серия ${rec.episodeOrdinal}",
+                hlsStreams = mapOf(OFFLINE_STREAM_KEY to rec.fileUri),
+                durationSec = rec.durationSec,
+            )
+        }
+        val dub = DubbingGroup(
+            id = "offline",
+            title = "Скачано (офлайн)",
+            source = AnimeSource.ANILIBRIA,
+            episodes = episodes,
+        )
+        return details.copy(dubbings = listOf(dub) + details.dubbings)
+    }
+
+    private data class CachedDetails(val savedAt: Long, val details: AnimeDetails)
+
+    private var detailsCache: MutableMap<String, CachedDetails>? = null
+
+    private fun cacheFile() = File(appContext.filesDir, "anime_details_cache.json")
+
+    private fun loadCache(): MutableMap<String, CachedDetails> {
+        detailsCache?.let { return it }
+        val map = mutableMapOf<String, CachedDetails>()
+        try {
+            val file = cacheFile()
+            if (file.exists()) {
+                val type = object : TypeToken<Map<String, CachedDetails>>() {}.type
+                val parsed: Map<String, CachedDetails>? = gson.fromJson(file.readText(), type)
+                if (parsed != null) map.putAll(parsed)
+            }
+        } catch (_: Exception) {}
+        detailsCache = map
+        return map
+    }
+
+    private fun cachedDetailsOrNull(id: String): AnimeDetails? = loadCache()[id]?.details
+
+    private suspend fun cacheDetails(id: String, details: AnimeDetails) = withContext(Dispatchers.IO) {
+        try {
+            val map = loadCache()
+            map[id] = CachedDetails(System.currentTimeMillis(), details)
+            if (map.size > 150) {
+                val trimmed = map.entries
+                    .sortedByDescending { it.value.savedAt }
+                    .take(120)
+                    .associate { it.key to it.value }
+                map.clear()
+                map.putAll(trimmed)
+            }
+            cacheFile().writeText(gson.toJson(map))
+        } catch (_: Exception) {}
     }
 
     suspend fun resolveEpisodeStream(episode: AnimeEpisode, source: AnimeSource): Map<String, String> {
