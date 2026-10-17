@@ -52,6 +52,7 @@ import kotlinx.coroutines.launch
 
 enum class HomeTab(val label: String, val pivotLabel: String) {
     LATEST("Свежие серии", "свежее"),
+    SCHEDULE("Расписание", "график"),
     HISTORY("История", "история"),
     SEARCH("Поиск", "поиск"),
     BOOKMARKS("Избранное", "избранное"),
@@ -86,12 +87,15 @@ fun HomeScreen(
     var searchQuery by remember { mutableStateOf("") }
 
     var latestList by remember { mutableStateOf<List<AnimeTitle>>(emptyList()) }
+    var scheduleList by remember { mutableStateOf<List<ScheduleEntry>>(emptyList()) }
     var searchResults by remember { mutableStateOf<List<AnimeTitle>>(emptyList()) }
     val bookmarks by repository.bookmarks.collectAsState()
     val history by repository.history.collectAsState()
 
     var isLoading by remember { mutableStateOf(false) }
+    var isLoadingSchedule by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var scheduleError by remember { mutableStateOf<String?>(null) }
 
     fun loadLatest() {
         scope.launch {
@@ -106,6 +110,23 @@ fun HomeScreen(
                 errorMessage = "Ошибка соединения: ${e.localizedMessage}"
             } finally {
                 isLoading = false
+            }
+        }
+    }
+
+    fun loadSchedule() {
+        scope.launch {
+            isLoadingSchedule = true
+            scheduleError = null
+            try {
+                scheduleList = repository.getSchedule()
+                if (scheduleList.isEmpty()) {
+                    scheduleError = "Расписание пусто. Проверьте сеть."
+                }
+            } catch (e: Exception) {
+                scheduleError = "Ошибка соединения: ${e.localizedMessage}"
+            } finally {
+                isLoadingSchedule = false
             }
         }
     }
@@ -141,6 +162,9 @@ fun HomeScreen(
                 if (pageTab == HomeTab.LATEST && latestList.isEmpty()) {
                     loadLatest()
                 }
+                if (pageTab == HomeTab.SCHEDULE && scheduleList.isEmpty()) {
+                    loadSchedule()
+                }
             }
         }
     }
@@ -149,6 +173,9 @@ fun HomeScreen(
         activeTab = tab
         if (tab == HomeTab.LATEST && latestList.isEmpty()) {
             loadLatest()
+        }
+        if (tab == HomeTab.SCHEDULE && scheduleList.isEmpty()) {
+            loadSchedule()
         }
     }
 
@@ -227,6 +254,14 @@ fun HomeScreen(
                         latestList = latestList,
                         history = history,
                         onRetry = { loadLatest() },
+                        onAnimeClick = onAnimeClick,
+                    )
+
+                    HomeTab.SCHEDULE -> ScheduleTabContent(
+                        isLoading = isLoadingSchedule,
+                        errorMessage = scheduleError,
+                        schedule = scheduleList,
+                        onRetry = { loadSchedule() },
                         onAnimeClick = onAnimeClick,
                     )
 
@@ -325,6 +360,14 @@ fun HomeScreen(
                         latestList = latestList,
                         history = history,
                         onRetry = { loadLatest() },
+                        onAnimeClick = onAnimeClick,
+                    )
+
+                    HomeTab.SCHEDULE -> ScheduleTabContent(
+                        isLoading = isLoadingSchedule,
+                        errorMessage = scheduleError,
+                        schedule = scheduleList,
+                        onRetry = { loadSchedule() },
                         onAnimeClick = onAnimeClick,
                     )
 
@@ -488,6 +531,294 @@ private fun LatestTabContent(
             }
         }
     }
+}
+
+@Composable
+private fun ScheduleTabContent(
+    isLoading: Boolean,
+    errorMessage: String?,
+    schedule: List<ScheduleEntry>,
+    onRetry: () -> Unit,
+    onAnimeClick: (AnimeTitle) -> Unit,
+) {
+    val scheme = LocalMetroScheme.current
+
+    if (isLoading && schedule.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = scheme.accent, strokeWidth = 2.dp)
+        }
+        return
+    }
+    if (errorMessage != null && schedule.isEmpty()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = errorMessage,
+                fontFamily = MetroFonts.text,
+                fontSize = 14.sp,
+                color = scheme.red,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            MetroButton(text = "Повторить", onClick = onRetry)
+        }
+        return
+    }
+    if (schedule.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                text = "Расписание выхода серий недоступно",
+                fontFamily = MetroFonts.text,
+                fontSize = 14.sp,
+                color = scheme.textDim,
+                textAlign = TextAlign.Center,
+            )
+        }
+        return
+    }
+
+    val todayIso = run {
+        val dow = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)
+        if (dow == java.util.Calendar.SUNDAY) 7 else dow - 1
+    }
+    val dateFormat = remember { java.text.SimpleDateFormat("d MMM", java.util.Locale("ru")) }
+
+    val groups = remember(schedule, todayIso) {
+        val known = schedule.filter { it.publishDay != null && it.publishDay in 1..7 }
+        val unknown = schedule.filter { it.publishDay == null || it.publishDay !in 1..7 }
+
+        val grouped = known
+            .groupBy { entry -> ((entry.publishDay!! - todayIso) + 7) % 7 }
+            .map { (offset, entries) ->
+                val day = entries.first().publishDay ?: 1
+                val cal = java.util.Calendar.getInstance()
+                cal.add(java.util.Calendar.DAY_OF_MONTH, offset)
+                val label = when (offset) {
+                    0 -> "Сегодня"
+                    1 -> "Завтра"
+                    else -> weekdayNameRu(day)
+                }
+                ScheduleDayGroup(
+                    offset = offset,
+                    label = label,
+                    dateLabel = dateFormat.format(cal.time),
+                    entries = entries.sortedBy { it.anime.titleRu },
+                )
+            }
+            .sortedBy { it.offset }
+            .toMutableList()
+
+        if (unknown.isNotEmpty()) {
+            grouped.add(
+                ScheduleDayGroup(
+                    offset = 99,
+                    label = "Другие",
+                    dateLabel = "",
+                    entries = unknown.sortedBy { it.anime.titleRu },
+                )
+            )
+        }
+        grouped
+    }
+
+    LazyColumn(
+        contentPadding = PaddingValues(bottom = 24.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        item(key = "schedule_header") {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                Text(
+                    text = "ГРАФИК ВЫХОДА",
+                    fontFamily = MetroFonts.headline,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    letterSpacing = 1.2.sp,
+                    color = scheme.textDim,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Новые серии онгоингов этого сезона",
+                    fontFamily = MetroFonts.text,
+                    fontSize = 12.sp,
+                    color = scheme.textDim.copy(alpha = 0.8f),
+                )
+            }
+        }
+
+        groups.forEach { group ->
+            item(key = "day_header_${group.offset}") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(22.dp)
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(1.5.dp))
+                            .background(scheme.accent)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = group.label,
+                        fontFamily = MetroFonts.headline,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        color = scheme.text,
+                    )
+                    if (group.dateLabel.isNotBlank()) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = group.dateLabel,
+                            fontFamily = MetroFonts.text,
+                            fontSize = 12.sp,
+                            color = scheme.textDim,
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "${group.entries.size}",
+                        fontFamily = MetroFonts.text,
+                        fontSize = 12.sp,
+                        color = scheme.accent,
+                    )
+                }
+            }
+
+            items(group.entries, key = { "${it.anime.id}_${it.publishDay}_${it.nextEpisode}" }) { entry ->
+                ScheduleItemCard(
+                    entry = entry,
+                    onClick = { onAnimeClick(entry.anime) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScheduleItemCard(
+    entry: ScheduleEntry,
+    onClick: () -> Unit,
+) {
+    val scheme = LocalMetroScheme.current
+    val anime = entry.anime
+    val isSerost = dev.metro.anime.ui.theme.LocalSerostMode.current
+    val posterModel: Any? = if (isSerost) dev.metro.anime.R.drawable.serost_cat else anime.posterUrl
+
+    FrostedGlassBox(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .metroClickable(onClick = onClick),
+        shape = MetroDimens.radiusSmall,
+        tint = Color.White.copy(alpha = 0.04f),
+        borderColor = scheme.stroke,
+        borderWidth = MetroDimens.strokeWidth,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(46.dp)
+                    .height(66.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(scheme.glass)
+                    .border(1.dp, scheme.stroke, RoundedCornerShape(4.dp)),
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(posterModel)
+                        .crossfade(true)
+                        .size(180, 250)
+                        .build(),
+                    contentDescription = anime.titleRu,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = anime.titleRu,
+                    fontFamily = MetroFonts.headline,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    color = scheme.text,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 17.sp,
+                )
+                Spacer(modifier = Modifier.height(5.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val epText = when {
+                        entry.nextEpisode != null -> "Серия ${entry.nextEpisode}"
+                        entry.publishedEpisode != null -> "Вышла ${entry.publishedEpisode}"
+                        else -> "Новая серия"
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(scheme.accent.copy(alpha = 0.16f))
+                            .border(1.dp, scheme.accent.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        Text(
+                            text = epText,
+                            fontFamily = MetroFonts.text,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            color = scheme.accent,
+                        )
+                    }
+                    val meta = listOfNotNull(
+                        anime.year?.toString(),
+                        anime.type?.takeIf { it.isNotBlank() },
+                    ).joinToString(" • ")
+                    if (meta.isNotBlank()) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = meta,
+                            fontFamily = MetroFonts.text,
+                            fontSize = 11.sp,
+                            color = scheme.textDim,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private data class ScheduleDayGroup(
+    val offset: Int,
+    val label: String,
+    val dateLabel: String,
+    val entries: List<ScheduleEntry>,
+)
+
+private fun weekdayNameRu(isoDay: Int): String = when (isoDay) {
+    1 -> "Понедельник"
+    2 -> "Вторник"
+    3 -> "Среда"
+    4 -> "Четверг"
+    5 -> "Пятница"
+    6 -> "Суббота"
+    else -> "Воскресенье"
 }
 
 @Composable

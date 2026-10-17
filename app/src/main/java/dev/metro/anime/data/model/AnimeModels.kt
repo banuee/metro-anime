@@ -18,6 +18,7 @@ data class AnimeTitle(
     val genres: List<String>? = emptyList(),
     val rating: Double? = null,
     val shikimoriId: Long? = null,
+    val isOngoing: Boolean = false,
     val source: AnimeSource? = AnimeSource.ANILIBRIA,
 ) {
     val safeGenres: List<String>
@@ -64,6 +65,13 @@ data class AnimeDetails(
     val title: AnimeTitle,
     val dubbings: List<DubbingGroup> = emptyList(),
     val rawDescription: String? = null,
+)
+
+data class ScheduleEntry(
+    val anime: AnimeTitle,
+    val nextEpisode: Int? = null,
+    val publishedEpisode: Int? = null,
+    val publishDay: Int? = null, // ISO: 1 = Понедельник .. 7 = Воскресенье
 )
 
 data class WatchProgress(

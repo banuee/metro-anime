@@ -27,7 +27,34 @@ class AnimeRepository(context: Context) {
     }
 
     suspend fun getLatestAnime(): List<AnimeTitle> {
-        return ApiClient.getAniLibriaLatest(limit = 30)
+        val raw = ApiClient.getAniLibriaLatest(limit = 48)
+        if (raw.isEmpty()) return raw
+
+        // Отсеиваем релизы «старых» тайтлов, которые AniLibria просто подняла
+        // из-за новой озвучки/переозвучки — они не должны попадать в «свежие серии».
+        val clean = raw.filterNot { isRedubRelease(it) }
+
+        val shikiIds = clean.mapNotNull { it.shikimoriId }
+        val finishedIds = ApiClient.getShikimoriFinishedIds(shikiIds)
+
+        return clean.filter { title ->
+            if (!title.isOngoing) return@filter false
+            val shiki = title.shikimoriId
+            shiki == null || shiki !in finishedIds
+        }.take(30)
+    }
+
+    private fun isRedubRelease(title: AnimeTitle): Boolean {
+        val t = title.titleRu.lowercase()
+        return t.contains("новая озвучка") ||
+            t.contains("новый перевод") ||
+            t.contains("новое озвучивание") ||
+            t.contains("переозвучка") ||
+            t.contains("новая озвучк")
+    }
+
+    suspend fun getSchedule(): List<ScheduleEntry> {
+        return ApiClient.getAniLibriaSchedule()
     }
 
     suspend fun searchAnime(query: String): List<AnimeTitle> {

@@ -56,6 +56,80 @@ object ApiClient {
         }
     }
 
+    suspend fun getAniLibriaSchedule(): List<ScheduleEntry> = withContext(Dispatchers.IO) {
+        val url = "$ANILIBRIA_BASE/api/v1/anime/schedule/week"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "MetroAnime/1.0")
+            .build()
+
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList()
+                val body = response.body?.string() ?: return@withContext emptyList()
+                val jsonArray = gson.fromJson(body, JsonArray::class.java) ?: return@withContext emptyList()
+                val list = mutableListOf<ScheduleEntry>()
+                for (elem in jsonArray) {
+                    val item = elem.asJsonObject
+                    val fullReleased = item.get("full_season_is_released")?.takeIf { !it.isJsonNull }?.asBoolean == true
+                    if (fullReleased) continue
+                    val releaseObj = item.getAsJsonObject("release") ?: continue
+                    val nextEp = item.get("next_release_episode_number")?.takeIf { !it.isJsonNull }?.asInt
+                    val published = item.getAsJsonObject("published_release_episode")
+                        ?.get("ordinal")?.takeIf { !it.isJsonNull }?.asInt
+                    val publishDay = releaseObj.getAsJsonObject("publish_day")
+                        ?.get("value")?.takeIf { !it.isJsonNull }?.asInt
+                    list.add(
+                        ScheduleEntry(
+                            anime = parseAniLibriaTitle(releaseObj),
+                            nextEpisode = nextEp,
+                            publishedEpisode = published,
+                            publishDay = publishDay,
+                        )
+                    )
+                }
+                list
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching AniLibria schedule", e)
+            emptyList()
+        }
+    }
+
+    suspend fun getShikimoriFinishedIds(shikimoriIds: List<Long>): Set<Long> = withContext(Dispatchers.IO) {
+        val ids = shikimoriIds.filter { it > 0 }.distinct().take(50)
+        if (ids.isEmpty()) return@withContext emptySet()
+        val idParam = ids.joinToString(",")
+        val domains = listOf("https://shikimori.io", "https://shikimori.one")
+        for (base in domains) {
+            val url = "$base/api/animes?ids=$idParam&limit=50"
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "MetroAnime/1.0")
+                .build()
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use
+                    val body = response.body?.string() ?: return@use
+                    val arr = gson.fromJson(body, JsonArray::class.java) ?: return@use
+                    val finished = mutableSetOf<Long>()
+                    for (elem in arr) {
+                        val obj = elem.asJsonObject
+                        val id = obj.get("id")?.asLong ?: continue
+                        val status = obj.get("status")?.takeIf { !it.isJsonNull }?.asString
+                        if (status != null && status != "ongoing" && status != "anons") {
+                            finished.add(id)
+                        }
+                    }
+                    return@withContext finished
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error fetching Shikimori statuses at $base", e)
+            }
+        }
+        emptySet()
+    }
+
     suspend fun searchAniLibria(query: String, limit: Int = 24): List<AnimeTitle> = withContext(Dispatchers.IO) {
         val url = "$ANILIBRIA_BASE/api/v1/anime/catalog/releases?f[search]=${java.net.URLEncoder.encode(query, "UTF-8")}&limit=$limit"
         val request = Request.Builder()
@@ -479,6 +553,7 @@ object ApiClient {
 
         val shikimoriId = obj.getAsJsonObject("shikimori")?.get("id")?.takeIf { !it.isJsonNull }?.asLong
         val rating = obj.getAsJsonObject("shikimori")?.get("rating")?.takeIf { !it.isJsonNull }?.asDouble
+        val isOngoing = obj.get("is_ongoing")?.takeIf { !it.isJsonNull }?.asBoolean ?: false
 
         return AnimeTitle(
             id = id,
@@ -493,6 +568,7 @@ object ApiClient {
             genres = genres,
             rating = rating,
             shikimoriId = shikimoriId,
+            isOngoing = isOngoing,
             source = AnimeSource.ANILIBRIA,
         )
     }

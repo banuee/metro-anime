@@ -17,8 +17,8 @@ android {
         applicationId = "dev.metro.anime"
         minSdk = 26
         targetSdk = 35
-        versionCode = 29
-        versionName = "0.3.8"
+        versionCode = 30
+        versionName = "0.3.9"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
