@@ -39,24 +39,48 @@ object HlsDownloader {
 
     data class Result(val fileUri: String, val sizeBytes: Long)
 
+    /**
+     * Прогресс загрузки.
+     * @param downloadedBytes реально скачано байт
+     * @param segmentsDone сколько сегментов скачано
+     * @param segmentsTotal всего сегментов (точно известно из плейлиста)
+     */
+    data class Progress(
+        val downloadedBytes: Long,
+        val segmentsDone: Int,
+        val segmentsTotal: Int,
+    ) {
+        /** Точный процент — по числу сегментов (размер сегментов заранее неизвестен). */
+        val fraction: Float
+            get() = if (segmentsTotal > 0) (segmentsDone.toFloat() / segmentsTotal).coerceIn(0f, 1f) else 0f
+    }
+
     suspend fun download(
         context: Context,
         playlistUrl: String,
         displayName: String,
-        onProgress: (downloaded: Long, total: Long) -> Unit,
+        onProgress: (Progress) -> Unit,
+        onStage: (stage: Stage) -> Unit = {},
     ): Result = withContext(Dispatchers.IO) {
         val ctx = currentCoroutineContext()
-        val workDir = File(context.cacheDir, "hls_downloads").apply { mkdirs() }
+        // Временные файлы — в external files dir: там больше свободного места,
+        // чем в cacheDir (cache система может вычистить его в любой момент).
+        val workDir = (context.getExternalFilesDir(null) ?: context.cacheDir)
+            .resolve("hls_downloads").apply { mkdirs() }
         val safeName = displayName.replace(Regex("[^\\p{L}\\p{N}_\\- ()\\[\\]]"), "_").take(80)
         val tsFile = File(workDir, "$safeName.ts")
         val mp4File = File(workDir, "$safeName.mp4")
         try {
-            val segmentUrls = resolveSegmentUrls(playlistUrl)
             ctx.ensureActive()
-            if (segmentUrls.isEmpty()) throw IllegalStateException("Пустой плейлист")
-            downloadSegments(segmentUrls, tsFile, onProgress) { ctx.ensureActive() }
-            remuxToMp4(tsFile, mp4File, videoOnly = false)
+            onStage(Stage.DOWNLOADING)
+            val playlist = resolvePlaylist(playlistUrl)
+            if (playlist.segments.isEmpty()) throw IllegalStateException("Пустой плейлист")
+            downloadSegments(playlist.segments, tsFile, onProgress, playlist.keyBytes) { ctx.ensureActive() }
             ctx.ensureActive()
+            onStage(Stage.REMUXING)
+            remuxToMp4(tsFile, mp4File, videoOnly = false) { ctx.ensureActive() }
+            ctx.ensureActive()
+            onStage(Stage.SAVING)
             saveToMediaStore(context, mp4File, safeName)
         } finally {
             tsFile.delete()
@@ -64,7 +88,21 @@ object HlsDownloader {
         }
     }
 
-    private fun resolveSegmentUrls(url: String): List<String> {
+    /** Стадия загрузки — для отображения прогресса в UI и уведомлении. */
+    enum class Stage { DOWNLOADING, REMUXING, SAVING }
+
+    /**
+     * Разбирает HLS-плейлист и возвращает список сегментов.
+     *
+     * Поддерживает:
+     *  - master-плейлист (#EXT-X-STREAM-INF) — выбирается вариант с максимальным BANDWIDTH;
+     *  - шифрование AES-128 (#EXT-X-KEY) — сегменты расшифровываются на лету;
+     *  - #EXT-X-MAP (init-сегмент fMP4) — скачивается первым.
+     */
+    /** Разобранный плейлист: сегменты и (если есть) ключ AES-128. */
+    private class Playlist(val segments: List<String>, val keyBytes: ByteArray? = null)
+
+    private fun resolvePlaylist(url: String): Playlist {
         var current = url
         var guard = 0
         while (guard++ < 5) {
@@ -76,14 +114,77 @@ object HlsDownloader {
 
             val variantHeader = lines.indexOfFirst { it.startsWith("#EXT-X-STREAM-INF") }
             if (variantHeader >= 0) {
-                val variantUri = lines.drop(variantHeader + 1).firstOrNull { !it.startsWith("#") }
+                // В master-плейлисте несколько вариантов — берём лучший по BANDWIDTH.
+                var bestIndex = variantHeader
+                var bestBandwidth = -1L
+                var index = 0
+                while (index < lines.size) {
+                    val line = lines[index]
+                    if (line.startsWith("#EXT-X-STREAM-INF")) {
+                        val bandwidth = line.substringAfter("BANDWIDTH=", "")
+                            .substringBefore(',')
+                            .trim()
+                            .toLongOrNull() ?: 0L
+                        if (bandwidth > bestBandwidth) {
+                            bestBandwidth = bandwidth
+                            bestIndex = index
+                        }
+                    }
+                    index++
+                }
+                val variantUri = lines.drop(bestIndex + 1).firstOrNull { !it.startsWith("#") }
                     ?: throw IllegalStateException("Не найден вариант потока")
                 current = resolveUrl(current, variantUri)
                 continue
             }
-            return lines.filter { !it.startsWith("#") }.map { resolveUrl(current, it) }
+
+            // Медиа-плейлист: собираем сегменты, ключ шифрования и init-сегмент.
+            val segments = mutableListOf<String>()
+            var keyUrl: String? = null
+            var keyBytes: ByteArray? = null
+            var mapUrl: String? = null
+            for (line in lines) {
+                when {
+                    line.startsWith("#EXT-X-KEY:") -> {
+                        val uri = line.substringAfter("URI=", "").substringBefore(',').trim('"', ' ')
+                        val method = line.substringAfter("METHOD=", "").substringBefore(',').trim()
+                        keyUrl = if (method.equals("AES-128", true) && uri.isNotEmpty()) {
+                            resolveUrl(current, uri)
+                        } else {
+                            null
+                        }
+                        keyBytes = null
+                    }
+                    line.startsWith("#EXT-X-MAP:") -> {
+                        val uri = line.substringAfter("URI=", "").substringBefore(',').trim('"', ' ')
+                        if (uri.isNotEmpty()) mapUrl = resolveUrl(current, uri)
+                    }
+                    line.startsWith("#") -> Unit
+                    else -> segments.add(resolveUrl(current, line))
+                }
+            }
+            if (keyUrl != null) {
+                keyBytes = fetchBytes(keyUrl)
+            }
+            // Init-сегмент fMP4 должен идти первым — иначе MediaExtractor не найдёт дорожки.
+            val result = mutableListOf<String>()
+            mapUrl?.let { result.add(it) }
+            result.addAll(segments)
+            return Playlist(result, keyBytes)
         }
-        return emptyList()
+        return Playlist(emptyList())
+    }
+
+    /** Скачивает бинарные данные (ключ AES-128). */
+    private fun fetchBytes(url: String): ByteArray {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "MetroAnime/1.0")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IllegalStateException("Ключ шифрования: HTTP ${response.code}")
+            return response.body?.bytes() ?: throw IllegalStateException("Пустой ключ шифрования")
+        }
     }
 
     private fun resolveUrl(base: String, relative: String): String {
@@ -105,10 +206,12 @@ object HlsDownloader {
     private fun downloadSegments(
         urls: List<String>,
         out: File,
-        onProgress: (Long, Long) -> Unit,
+        onProgress: (Progress) -> Unit,
+        keyBytes: ByteArray?,
         checkActive: () -> Unit,
     ) {
-        val total = urls.size.toLong()
+        val totalSegments = urls.size
+        var downloaded = 0L
         FileOutputStream(out).use { fos ->
             urls.forEachIndexed { index, segmentUrl ->
                 checkActive()
@@ -119,11 +222,52 @@ object HlsDownloader {
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) throw IllegalStateException("Сегмент ${index + 1}: HTTP ${response.code}")
                     val body = response.body ?: throw IllegalStateException("Пустой сегмент ${index + 1}")
-                    body.byteStream().use { input -> input.copyTo(fos, 64 * 1024) }
+                    if (keyBytes != null) {
+                        // AES-128-CBC: расшифровываем поток целиком (блоки по 16 байт).
+                        val encrypted = body.bytes()
+                        val iv = if (encrypted.size >= 16) encrypted.copyOfRange(0, 16) else ByteArray(16)
+                        val plain = decryptAes128(
+                            encrypted.copyOfRange(minOf(16, encrypted.size), encrypted.size),
+                            keyBytes,
+                            iv,
+                        )
+                        fos.write(plain)
+                        downloaded += plain.size
+                    } else {
+                        body.byteStream().use { input ->
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                checkActive()
+                                val read = input.read(buffer)
+                                if (read <= 0) break
+                                fos.write(buffer, 0, read)
+                                downloaded += read
+                            }
+                        }
+                    }
                 }
-                onProgress(index + 1L, total)
+                // Сегмент скачан целиком — сообщаем прогресс
+                onProgress(Progress(downloaded, index + 1, totalSegments))
             }
+            onProgress(Progress(downloaded, totalSegments, totalSegments))
         }
+    }
+
+    /**
+     * Расшифровка AES-128-CBC (HLS #EXT-X-KEY).
+     *
+     * Расшифровываем весь поток целиком: сегменты могут быть разной длины, а CBC
+     * требует блочного выравнивания по 16 байт — расшифровка по частям невозможна.
+     */
+    private fun decryptAes128(data: ByteArray, key: ByteArray, iv: ByteArray): ByteArray {
+        val cipher = javax.crypto.Cipher.getInstance("AES/CBC/NoPadding")
+        val secretKey = javax.crypto.spec.SecretKeySpec(key, "AES")
+        val params = javax.crypto.spec.IvParameterSpec(iv)
+        cipher.init(javax.crypto.Cipher.DECRYPT_MODE, secretKey, params)
+        val out = cipher.doFinal(data)
+        // Отбрасываем PKCS#7-паддинг, если он есть.
+        val pad = out.lastOrNull()?.toInt() ?: 0
+        return if (pad in 1..16 && pad <= out.size) out.copyOf(out.size - pad) else out
     }
 
     /**
@@ -138,10 +282,10 @@ object HlsDownloader {
      *    сломанные stts, и файл не играет (позиция 0, уход в BUFFERING). Поэтому видео
      *    переводим в равномерный CFR-таймлайн.
      */
-    fun remuxToMp4(ts: File, mp4: File, videoOnly: Boolean) {
-        val plan = scanTracks(ts, videoOnly)
+    fun remuxToMp4(ts: File, mp4: File, videoOnly: Boolean, checkActive: () -> Unit = {}) {
+        val plan = scanTracks(ts, videoOnly, checkActive)
         if (plan.videoTrack < 0 && plan.audioTrack < 0) throw IllegalStateException("Дорожки не найдены")
-        muxTracks(ts, mp4, plan)
+        muxTracks(ts, mp4, plan, checkActive)
     }
 
     private class MuxPlan(
@@ -151,12 +295,13 @@ object HlsDownloader {
         val videoFrameUs: Long,
         val videoBasePts: Long,
         val audioSamples: Int,
+        val audioBasePts: Long,
     )
 
     /**
      * Первый проход по TS: количество сэмплов по дорожкам и растяжка времени по видео.
      */
-    private fun scanTracks(ts: File, videoOnly: Boolean): MuxPlan {
+    private fun scanTracks(ts: File, videoOnly: Boolean, checkActive: () -> Unit): MuxPlan {
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(ts.absolutePath)
@@ -172,8 +317,12 @@ object HlsDownloader {
             var videoMinPts = Long.MAX_VALUE
             var videoMaxPts = Long.MIN_VALUE
             var audioSamples = 0
-            val scratch = ByteBuffer.allocate(1024 * 1024)
+            var audioMinPts = Long.MAX_VALUE
+            // 8 МБ: сэмпл крупнее 1 МБ (4K-кадры) обрезался, и длительность кадра
+            // считалась неверно -> «битый» MP4.
+            val scratch = ByteBuffer.allocate(8 * 1024 * 1024)
             while (true) {
+                checkActive()
                 val track = extractor.sampleTrackIndex
                 if (track < 0) break
                 val size = extractor.readSampleData(scratch, 0)
@@ -185,6 +334,7 @@ object HlsDownloader {
                     if (pts > videoMaxPts) videoMaxPts = pts
                 } else if (track == audioTrack) {
                     audioSamples++
+                    if (pts < audioMinPts) audioMinPts = pts
                 }
                 extractor.advance()
             }
@@ -194,14 +344,23 @@ object HlsDownloader {
             } else {
                 0L
             }
-            val videoBasePts = if (videoMinPts == Long.MAX_VALUE) 0L else videoMinPts
+            // Общая база для обеих дорожек: иначе видео (перенесённое на свою базу) и
+            // аудио (с исходными PTS) разъезжаются на разницу стартовых меток (~1 c).
+            val basePts = when {
+                videoMinPts != Long.MAX_VALUE && audioMinPts != Long.MAX_VALUE -> minOf(videoMinPts, audioMinPts)
+                videoMinPts != Long.MAX_VALUE -> videoMinPts
+                audioMinPts != Long.MAX_VALUE -> audioMinPts
+                else -> 0L
+            }
+            val videoBasePts = if (videoMinPts == Long.MAX_VALUE) basePts else videoMinPts
+            val audioBasePts = if (audioMinPts == Long.MAX_VALUE) basePts else audioMinPts
 
             Log.d(
                 TAG,
                 "remux plan: video=$videoSamples samples frame=${videoFrameUs}us base=$videoBasePts " +
-                    "audio=$audioSamples samples (raw AAC, без ADTS)"
+                    "audio=$audioSamples samples base=$audioBasePts (raw AAC, без ADTS)"
             )
-            return MuxPlan(videoTrack, audioTrack, videoSamples, videoFrameUs, videoBasePts, audioSamples)
+            return MuxPlan(videoTrack, audioTrack, videoSamples, videoFrameUs, videoBasePts, audioSamples, audioBasePts)
         } finally {
             extractor.release()
         }
@@ -221,7 +380,7 @@ object HlsDownloader {
     /**
      * Второй проход: пишем в MP4 с равномерным CFR-таймлайном по видео и исходными PTS по аудио.
      */
-    private fun muxTracks(ts: File, mp4: File, plan: MuxPlan) {
+    private fun muxTracks(ts: File, mp4: File, plan: MuxPlan, checkActive: () -> Unit) {
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(ts.absolutePath)
@@ -253,6 +412,7 @@ object HlsDownloader {
                 var videoIndex = 0L
 
                 while (true) {
+                    checkActive()
                     val track = extractor.sampleTrackIndex
                     if (track < 0) break
                     val size = extractor.readSampleData(buffer, 0)
@@ -268,10 +428,11 @@ object HlsDownloader {
                         muxer.writeSampleData(muxVideo, buffer, info)
                         videoIndex++
                     } else if (track == plan.audioTrack && muxAudio >= 0) {
-                        // Сырые AAC-кадры (без ADTS) — пишем как есть, сохраняя исходные PTS.
+                        // Сырые AAC-кадры (без ADTS) — пишем как есть.
+                        // PTS переносим на ту же базу, что и видео, иначе дорожки разъедутся.
                         info.offset = 0
                         info.size = size
-                        info.presentationTimeUs = originalPts
+                        info.presentationTimeUs = (originalPts - plan.audioBasePts).coerceAtLeast(0L)
                         info.flags = 0
                         muxer.writeSampleData(muxAudio, buffer, info)
                     }

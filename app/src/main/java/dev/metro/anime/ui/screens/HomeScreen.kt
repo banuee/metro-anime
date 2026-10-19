@@ -51,6 +51,10 @@ import dev.metro.anime.ui.theme.LocalMetroScheme
 import dev.metro.anime.ui.theme.MetroDimens
 import dev.metro.anime.ui.theme.MetroFonts
 import dev.metro.anime.ui.theme.metroClickable
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 enum class HomeTab(val label: String, val pivotLabel: String) {
@@ -117,20 +121,32 @@ fun HomeScreen(
         }
     }
 
+    // Предыдущий поисковый запрос: его нужно отменять, иначе ответ на старый запрос
+    // может прийти позже ответа на новый и переписать результаты (гоночный поиск).
+    var searchJob by remember { mutableStateOf<Job?>(null) }
+
     fun performSearch(q: String) {
+        searchJob?.cancel()
         if (q.isBlank()) {
             searchResults = emptyList()
+            isLoading = false
             return
         }
-        scope.launch {
-            isLoading = true
-            errorMessage = null
+        isLoading = true
+        errorMessage = null
+        searchJob = scope.launch {
+            // Небольшая задержка: не отправляем запрос на каждый введённый символ
+            delay(350)
             try {
-                searchResults = repository.searchAnime(q)
+                val results = repository.searchAnime(q)
+                // Пока идёт новый запрос, результаты уже неактуальны
+                if (isActive) searchResults = results
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                errorMessage = "Ошибка поиска: ${e.localizedMessage}"
+                if (isActive) errorMessage = "Ошибка поиска: ${e.localizedMessage}"
             } finally {
-                isLoading = false
+                if (isActive) isLoading = false
             }
         }
     }
@@ -606,7 +622,7 @@ private fun DownloadsTabContent(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Нажмите кнопку загрузки рядом с серией\nв карточке аниме, чтобы смотреть её офлайн",
+                    text = "Откройте серию в плеере и нажмите\n«Скачать в галерею» в параметрах видео",
                     fontFamily = MetroFonts.text,
                     fontSize = 12.sp,
                     color = scheme.textDim.copy(alpha = 0.7f),
@@ -691,7 +707,7 @@ private fun ActiveDownloadsCard(tasks: List<DownloadTask>) {
                     text = if (task.status == DownloadStatus.REMUXING) {
                         "Обработка…"
                     } else {
-                        "${(task.progress * 100).toInt()}% • ${formatBytes(task.downloadedBytes)} из ${formatBytes(task.totalBytes)}"
+                        "${(task.progress * 100).toInt()}% • ${formatDownloadBytes(task.downloadedBytes)}"
                     },
                     fontFamily = MetroFonts.text,
                     fontSize = 10.sp,
@@ -757,7 +773,7 @@ private fun DownloadAnimeCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "${episodes.size} ${episodesWord(episodes.size)} • ${formatBytes(totalSize)}",
+                        text = "${episodes.size} ${episodesWord(episodes.size)} • ${formatDownloadBytes(totalSize)}",
                         fontFamily = MetroFonts.text,
                         fontSize = 11.sp,
                         color = scheme.accent,
@@ -830,7 +846,7 @@ private fun DownloadEpisodeChip(
                 fontSize = 11.sp,
                 color = scheme.text,
             )
-            val sizeText = if (episode.sizeBytes > 0) " • ${formatBytes(episode.sizeBytes)}" else ""
+            val sizeText = if (episode.sizeBytes > 0) " • ${formatDownloadBytes(episode.sizeBytes)}" else ""
             Text(
                 text = "$qualityText$sizeText",
                 fontFamily = MetroFonts.text,
@@ -860,17 +876,6 @@ private fun episodesWord(count: Int): String {
     }
 }
 
-private fun formatBytes(bytes: Long): String {
-    if (bytes <= 0) return "0 МБ"
-    val kb = bytes / 1024.0
-    val mb = kb / 1024.0
-    val gb = mb / 1024.0
-    return when {
-        gb >= 1.0 -> String.format("%.1f ГБ", gb).replace('.', ',')
-        mb >= 1.0 -> String.format("%.0f МБ", mb)
-        else -> String.format("%.0f КБ", kb)
-    }
-}
 
 @Composable
 private fun SearchTabContent(

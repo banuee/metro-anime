@@ -24,7 +24,7 @@ class AutoUpdateWorker(
     }
 
     override suspend fun doWork(): Result {
-        val settingsRepo = MetroSettingsRepository(context)
+        val settingsRepo = MetroSettingsRepository.getInstance(context)
         val settings = settingsRepo.settingsFlow.first()
         val interval = settings.autoUpdateIntervalMinutes
 

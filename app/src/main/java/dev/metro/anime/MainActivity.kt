@@ -130,7 +130,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         repository = AnimeRepository(applicationContext)
-        settingsRepository = MetroSettingsRepository(applicationContext)
+        settingsRepository = MetroSettingsRepository.getInstance(applicationContext)
         updateRepository = UpdateRepository(applicationContext)
         syncClient = dev.metro.anime.data.sync.MetroSyncClient(applicationContext, repository)
         dev.metro.anime.data.AutoUpdateNotificationHelper.createNotificationChannel(applicationContext)

@@ -746,7 +746,14 @@ object ApiClient {
                             if (epObj != null) {
                                 val epKeys = epObj.keySet().toList().sortedBy { it.toIntOrNull() ?: 0 }
                                 for (epKey in epKeys) {
-                                    val epUrl = epObj.get(epKey)?.asString ?: continue
+                                    // Значение может быть не строкой (объект/JsonNull) —
+                                    // asString бросил бы исключение и обрушил разбор
+                                    // ВСЕХ озвучек тайтла. Поэтому проверяем тип.
+                                    val epUrl = epObj.get(epKey)
+                                        ?.takeIf { it.isJsonPrimitive }
+                                        ?.asString
+                                        ?.takeIf { it.isNotBlank() }
+                                        ?: continue
                                     val fullUrl = if (epUrl.startsWith("//")) "https:$epUrl" else epUrl
                                     val rawOrd = epKey.toIntOrNull() ?: 1
                                     val ord = if (isSpecialSeason) 1000 + rawOrd else rawOrd

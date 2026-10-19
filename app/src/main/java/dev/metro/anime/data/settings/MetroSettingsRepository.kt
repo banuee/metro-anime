@@ -64,11 +64,26 @@ data class WallpaperBitmapHolder(
     val blurred: ImageBitmap,
 )
 
-class MetroSettingsRepository(private val context: Context) {
+class MetroSettingsRepository private constructor(private val context: Context) {
     private val app = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     companion object {
+        @Volatile
+        private var instance: MetroSettingsRepository? = null
+
+        /**
+         * Единственный экземпляр репозитория.
+         *
+         * Репозиторий держит вечные корутины (stateIn + collect по DataStore) и
+         * полноэкранные битмапы обоев (~16 МБ на экземпляр). Если создавать новый
+         * экземпляр при каждом открытии плеера, они не отменяются и память растёт.
+         */
+        fun getInstance(context: Context): MetroSettingsRepository =
+            instance ?: synchronized(this) {
+                instance ?: MetroSettingsRepository(context.applicationContext).also { instance = it }
+            }
+
         private val KEY_ACCENT = intPreferencesKey("accent_color")
         private val KEY_BLUR_ENABLED = booleanPreferencesKey("blur_enabled")
         private val KEY_BLUR_RADIUS = intPreferencesKey("blur_radius")

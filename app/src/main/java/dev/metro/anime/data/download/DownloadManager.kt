@@ -88,6 +88,10 @@ object DownloadManager {
         return _tasks.value.firstOrNull { it.id == id }
     }
 
+    /**
+     * Ставит серию в очередь на скачивание.
+     * @return true, если задача принята; false, если уже скачана или уже в очереди.
+     */
     fun enqueue(
         anime: AnimeTitle,
         episode: AnimeEpisode,
@@ -96,11 +100,11 @@ object DownloadManager {
         quality: String,
         streamUrl: String,
         durationSec: Int?,
-    ) {
-        if (!initialized || streamUrl.isBlank()) return
+    ): Boolean {
+        if (!initialized || streamUrl.isBlank()) return false
         val id = taskId(anime.id, episode.ordinal)
-        if (isDownloaded(anime.id, episode.ordinal)) return
-        if (_tasks.value.any { it.id == id && it.status.isActive }) return
+        if (isDownloaded(anime.id, episode.ordinal)) return false
+        if (_tasks.value.any { it.id == id && it.status.isActive }) return false
 
         val task = DownloadTask(
             id = id,
@@ -117,15 +121,16 @@ object DownloadManager {
         _tasks.value = _tasks.value.filterNot { it.id == id } + task
         DownloadService.start(appContext)
         ensureWorker()
+        return true
     }
 
     fun cancel(animeId: String, ordinal: Int) {
         val id = taskId(animeId, ordinal)
-        jobs[id]?.cancel()
-        jobs.remove(id)
+        // Ставим статус ДО отмены job: иначе process() успеет перезаписать его на COMPLETED.
         _tasks.value = _tasks.value.map {
             if (it.id == id) it.copy(status = DownloadStatus.CANCELLED) else it
         }
+        jobs.remove(id)?.cancel()
     }
 
     fun clearFinishedTasks() {
@@ -170,22 +175,44 @@ object DownloadManager {
                     posterUrl = title.posterUrl.ifBlank { record.anime.posterUrl },
                     shikimoriId = title.shikimoriId ?: record.anime.shikimoriId,
                 )
-                if (merged != record.anime) changed = true
+                // AnimeTitle.equals() сравнивает только id, поэтому сравниваем поля явно —
+                // иначе изменения никогда не фиксировались и терялись после перезапуска.
+                if (merged.titleRu != record.anime.titleRu ||
+                    merged.posterUrl != record.anime.posterUrl ||
+                    merged.shikimoriId != record.anime.shikimoriId
+                ) {
+                    changed = true
+                }
                 record.copy(anime = merged)
             }
         }
         if (changed) persistDownloads()
     }
 
+    /**
+     * Воркер очереди скачиваний.
+     *
+     * Важно: очередь проверяется ПОСЛЕ выхода из цикла ещё раз. Иначе гонка —
+     * задача, добавленная в момент, когда воркер уже решил завершиться, осталась бы
+     * в статусе QUEUED навсегда (никто бы её не взял).
+     */
     private fun ensureWorker() {
         if (worker?.isActive == true) return
         worker = scope.launch {
             while (true) {
                 val next = _tasks.value.firstOrNull { it.status == DownloadStatus.QUEUED } ?: break
-                val job = launch { process(next.id) }
+                // Job регистрируем ДО запуска обработки: иначе отмена попадёт в окно
+                // между launch и записью в map, и загрузка продолжится, несмотря на отмену.
+                val job = scope.launch { process(next.id) }
                 jobs[next.id] = job
                 job.join()
                 jobs.remove(next.id)
+            }
+            // Страховка от гонки: если за время завершения воркера добавилась новая задача —
+            // подхватываем её (ensureWorker() ниже запустит новый воркер).
+            if (_tasks.value.any { it.status == DownloadStatus.QUEUED }) {
+                ensureWorker()
+                return@launch
             }
             DownloadService.stop(appContext)
             // Завершённые и упавшие задачи не нужны — убираем, чтобы список не разрастался
@@ -206,13 +233,22 @@ object DownloadManager {
                 context = appContext,
                 playlistUrl = task.streamUrl,
                 displayName = buildFileName(task),
-                onProgress = { done, total ->
+                onProgress = { p ->
                     updateTask(id) {
                         it.copy(
-                            downloadedBytes = done,
-                            totalBytes = total,
-                            progress = if (total > 0) (done.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f,
+                            downloadedBytes = p.downloadedBytes,
+                            totalBytes = p.downloadedBytes,
+                            progress = p.fraction,
                         )
+                    }
+                },
+                onStage = { stage ->
+                    updateTask(id) {
+                        when (stage) {
+                            HlsDownloader.Stage.DOWNLOADING -> it.copy(status = DownloadStatus.DOWNLOADING)
+                            HlsDownloader.Stage.REMUXING -> it.copy(status = DownloadStatus.REMUXING, progress = 1f)
+                            HlsDownloader.Stage.SAVING -> it.copy(status = DownloadStatus.REMUXING, progress = 1f)
+                        }
                     }
                 },
             )

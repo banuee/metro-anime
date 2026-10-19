@@ -484,40 +484,50 @@ class AnimeRepository(context: Context) {
 
     private data class CachedDetails(val savedAt: Long, val details: AnimeDetails)
 
+    // Кэш деталей читается из UI-потока и пишется из IO — нужен потокобезопасный доступ.
+    private val detailsCacheLock = Any()
+    @Volatile
     private var detailsCache: MutableMap<String, CachedDetails>? = null
 
     private fun cacheFile() = File(appContext.filesDir, "anime_details_cache.json")
 
     private fun loadCache(): MutableMap<String, CachedDetails> {
         detailsCache?.let { return it }
-        val map = mutableMapOf<String, CachedDetails>()
-        try {
-            val file = cacheFile()
-            if (file.exists()) {
-                val type = object : TypeToken<Map<String, CachedDetails>>() {}.type
-                val parsed: Map<String, CachedDetails>? = gson.fromJson(file.readText(), type)
-                if (parsed != null) map.putAll(parsed)
-            }
-        } catch (_: Exception) {}
-        detailsCache = map
-        return map
+        synchronized(detailsCacheLock) {
+            detailsCache?.let { return it }
+            val map = mutableMapOf<String, CachedDetails>()
+            try {
+                val file = cacheFile()
+                if (file.exists()) {
+                    val type = object : TypeToken<Map<String, CachedDetails>>() {}.type
+                    val parsed: Map<String, CachedDetails>? = gson.fromJson(file.readText(), type)
+                    if (parsed != null) map.putAll(parsed)
+                }
+            } catch (_: Exception) {}
+            detailsCache = map
+            return map
+        }
     }
 
     private fun cachedDetailsOrNull(id: String): AnimeDetails? = loadCache()[id]?.details
 
     private suspend fun cacheDetails(id: String, details: AnimeDetails) = withContext(Dispatchers.IO) {
         try {
-            val map = loadCache()
-            map[id] = CachedDetails(System.currentTimeMillis(), details)
-            if (map.size > 150) {
-                val trimmed = map.entries
-                    .sortedByDescending { it.value.savedAt }
-                    .take(120)
-                    .associate { it.key to it.value }
-                map.clear()
-                map.putAll(trimmed)
+            // Запись тоже под блокировкой: параллельная запись в тот же файл
+            // могла привести к повреждённому JSON.
+            synchronized(detailsCacheLock) {
+                val map = loadCache()
+                map[id] = CachedDetails(System.currentTimeMillis(), details)
+                if (map.size > 150) {
+                    val trimmed = map.entries
+                        .sortedByDescending { it.value.savedAt }
+                        .take(120)
+                        .associate { it.key to it.value }
+                    map.clear()
+                    map.putAll(trimmed)
+                }
+                cacheFile().writeText(gson.toJson(map))
             }
-            cacheFile().writeText(gson.toJson(map))
         } catch (_: Exception) {}
     }
 
@@ -568,15 +578,22 @@ class AnimeRepository(context: Context) {
         } catch (_: Exception) {}
     }
 
+    // Синхронизация операций с историей: saveProgress вызывается из плеера (главный поток),
+    // а restoreData — из фоновой синхронизации с ПК. Без блокировки одно из
+    // обновлений могло затереться другим.
+    private val historyLock = Any()
+
     fun saveProgress(progress: WatchProgress) {
         val cleanProgress = progress.sanitized().copy(updatedAt = System.currentTimeMillis())
-        val current = _history.value.toMutableList()
-        current.removeAll { it.anime.id == cleanProgress.anime.id }
-        current.add(0, cleanProgress)
-        // Keep up to 50 items
-        val trimmed = if (current.size > 50) current.take(50) else current
-        _history.value = trimmed.toList()
-        prefs.edit().putString("watch_history", gson.toJson(trimmed)).apply()
+        synchronized(historyLock) {
+            val current = _history.value.toMutableList()
+            current.removeAll { it.anime.id == cleanProgress.anime.id }
+            current.add(0, cleanProgress)
+            // Keep up to 50 items
+            val trimmed = if (current.size > 50) current.take(50) else current
+            _history.value = trimmed.toList()
+            prefs.edit().putString("watch_history", gson.toJson(trimmed)).apply()
+        }
     }
 
     fun getProgress(animeId: String): WatchProgress? {
@@ -597,12 +614,14 @@ class AnimeRepository(context: Context) {
     fun restoreData(bookmarks: List<AnimeTitle>, history: List<WatchProgress>) {
         val cleanBookmarks = bookmarks.map { it.sanitized() }
         val cleanHistory = history.map { it.sanitized() }
-        _bookmarks.value = cleanBookmarks
-        _history.value = cleanHistory
-        prefs.edit()
-            .putString("bookmarks", gson.toJson(cleanBookmarks))
-            .putString("watch_history", gson.toJson(cleanHistory))
-            .apply()
+        synchronized(historyLock) {
+            _bookmarks.value = cleanBookmarks
+            _history.value = cleanHistory
+            prefs.edit()
+                .putString("bookmarks", gson.toJson(cleanBookmarks))
+                .putString("watch_history", gson.toJson(cleanHistory))
+                .apply()
+        }
     }
 }
 

@@ -2,9 +2,13 @@ package dev.metro.anime.ui.screens
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.os.Build
 import android.net.Uri
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -61,10 +65,13 @@ import dev.metro.anime.data.download.DownloadManager
 import dev.metro.anime.data.model.AnimeEpisode
 import dev.metro.anime.data.model.AnimeSource
 import dev.metro.anime.data.model.AnimeTitle
+import dev.metro.anime.data.model.formatDownloadBytes
+import dev.metro.anime.data.model.isActive
 import dev.metro.anime.data.model.sanitized
 import dev.metro.anime.data.repository.AnimeRepository
 import kotlin.math.roundToInt
 import dev.metro.anime.data.settings.MetroSettingsRepository
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import dev.metro.anime.ui.components.MetroButton
@@ -100,7 +107,7 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val scheme = LocalMetroScheme.current
-    val settingsRepo = remember { MetroSettingsRepository(context) }
+    val settingsRepo = remember { MetroSettingsRepository.getInstance(context) }
     val currentSettings by settingsRepo.settings.collectAsState()
     val playerOpacity = currentSettings.playerControlsOpacity
     val hudPillGlass = Color(0xFF101016).copy(alpha = playerOpacity)
@@ -108,6 +115,18 @@ fun PlayerScreen(
     val hudBorder = Color.White.copy(alpha = (playerOpacity * 0.10f).coerceIn(0.03f, 0.08f))
 
     val hazeState = remember { HazeState() }
+    // Уведомление о загрузке: на Android 13+ без разрешения его не видно,
+    // и пользователь не понимает, идёт ли скачивание.
+    val notificationsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = {},
+    )
+    // На Android 8-9 запись в публичную папку «Фильмы» требует WRITE_EXTERNAL_STORAGE
+    // (на Android 10+ работает MediaStore, разрешение не нужно).
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = {},
+    )
     val playerBlurEnabled = currentSettings.playerBlurEnabled
     val playerBlurRadius = currentSettings.playerBlurRadius.dp
     val playerHazeStyle = remember(playerBlurRadius) {
@@ -147,6 +166,11 @@ fun PlayerScreen(
     var downloadRequestInFlight by remember { mutableStateOf(false) }
     var downloadHudText by remember { mutableStateOf<String?>(null) }
     var downloadHudVisible by remember { mutableStateOf(false) }
+    // Активная задача скачивания текущей серии — для показа прогресса прямо в плеере
+    val downloadTasks by DownloadManager.tasks.collectAsState()
+    val currentDownloadTask = downloadTasks.firstOrNull {
+        it.anime.id == anime.id && it.episodeOrdinal == episode.ordinal
+    }
     fun updateQuality(newQuality: String) {
         streamsState = Pair(streamsState.first, newQuality)
     }
@@ -180,6 +204,9 @@ fun PlayerScreen(
     var seekJob by remember { mutableStateOf<Job?>(null) }
 
     val currentEpisode by rememberUpdatedState(episode)
+    // Фоновый резолв онлайн-ссылок: должен отменяться при смене серии,
+    // иначе старый ответ подставит URL чужой серии.
+    var backgroundResolveJob by remember { mutableStateOf<Job?>(null) }
     val currentAnime by rememberUpdatedState(anime)
     val currentDubbingTitle by rememberUpdatedState(dubbingTitle)
     val currentSource by rememberUpdatedState(source)
@@ -382,8 +409,15 @@ fun PlayerScreen(
         }
     }
 
-    fun saveCurrentProgress() {
-        val ep = currentEpisode
+    /**
+     * Сохраняет прогресс просмотра.
+     * @param episodeOverride серия, к которой относится позиция. Нужен при смене серии:
+     * rememberUpdatedState обновляется ДО вызова onDispose, поэтому currentEpisode уже «новая»
+     * серия, а позиция — от «старой». Без явного переопределения 20 минут просмотра серии 4
+     * записывались бы на серию 5.
+     */
+    fun saveCurrentProgress(episodeOverride: AnimeEpisode? = null) {
+        val ep = episodeOverride ?: currentEpisode
         val livePos = try { exoPlayer.currentPosition.coerceAtLeast(0L) } catch (_: Throwable) { 0L }
         val liveDur = try { exoPlayer.duration.coerceAtLeast(0L) } catch (_: Throwable) { 0L }
         val pos = if (livePos > 0L) livePos else currentPositionMs
@@ -548,10 +582,13 @@ fun PlayerScreen(
 
     val triggerSeek: (Int) -> Unit = { deltaSec ->
         val current = exoPlayer.currentPosition
+        // Пока длительность неизвестна (буферизация/стрим не отдал duration),
+        // верхняя граница не должна обнулять позицию.
+        val upperBound = if (durationMs > 0L) durationMs else Long.MAX_VALUE
         val target = if (deltaSec < 0) {
             (current + deltaSec * 1000L).coerceAtLeast(0L)
         } else {
-            (current + deltaSec * 1000L).coerceAtMost(durationMs)
+            (current + deltaSec * 1000L).coerceAtMost(upperBound)
         }
         exoPlayer.seekTo(target)
 
@@ -726,6 +763,9 @@ fun PlayerScreen(
 
     // Resolve streams
     LaunchedEffect(episode, source) {
+        // Гасим предыдущий фоновый резолв (он мог остаться от прошлой серии)
+        backgroundResolveJob?.cancel()
+        backgroundResolveJob = null
         isResolvingStreams = true
         resolveError = null
         currentPositionMs = 0L
@@ -746,15 +786,18 @@ fun PlayerScreen(
             if (offline != null && offline.fileUri.isNotBlank()) {
                 // Скачанная серия играется по умолчанию, но онлайн-качества подгружаем
                 // в фоне, чтобы можно было переключиться на онлайн-источник.
-                streamsState = Pair(streamsState.first, dev.metro.anime.data.model.OFFLINE_STREAM_KEY)
+                streamsState = Pair(emptyMap(), dev.metro.anime.data.model.OFFLINE_STREAM_KEY)
                 isResolvingStreams = false
-                coroutineScope.launch {
+                // Резолв привязан к текущей серии: coroutineScope переживает смену episode,
+                // и без проверки старый ответ подставлял бы URL чужой серии.
+                val episodeOrdinal = episode.ordinal
+                backgroundResolveJob = coroutineScope.launch {
                     val online = try {
                         repository.resolveEpisodeStream(episode, source)
                     } catch (_: Exception) {
                         emptyMap()
                     }
-                    if (online.isNotEmpty()) {
+                    if (online.isNotEmpty() && currentEpisode.ordinal == episodeOrdinal) {
                         streamsState = Pair(
                             online.filterKeys { it != dev.metro.anime.data.model.OFFLINE_STREAM_KEY },
                             streamsState.second
@@ -785,6 +828,9 @@ fun PlayerScreen(
 
     // Feed URL to ExoPlayer
     LaunchedEffect(streamsState, episode) {
+        // Пока идёт резолв текущей серии, нельзя отдавать URL предыдущей серии
+        // (streamsState обновляется только после резолва).
+        if (isResolvingStreams) return@LaunchedEffect
         val streamUrl = if (selectedQuality == dev.metro.anime.data.model.OFFLINE_STREAM_KEY) {
             offlineDownload?.fileUri
         } else {
@@ -797,6 +843,9 @@ fun PlayerScreen(
             } else {
                 exoPlayer.currentPosition.coerceAtLeast(0L)
             }
+            // Сохраняем состояние воспроизведения: смена качества на паузе не должна
+            // запускать видео.
+            val wasPlaying = exoPlayer.playWhenReady
             android.util.Log.d("PlayerScreen", "feed url=$streamUrl seek=$targetSeek")
             val metaBuilder = MediaMetadata.Builder()
                 .setTitle(currentAnime.titleRu.ifBlank { currentAnime.titleOrig ?: "" })
@@ -811,7 +860,7 @@ fun PlayerScreen(
                 .build()
             exoPlayer.setMediaItem(mediaItem, targetSeek)
             exoPlayer.prepare()
-            exoPlayer.play()
+            exoPlayer.playWhenReady = wasPlaying
         }
     }
 
@@ -856,10 +905,13 @@ fun PlayerScreen(
         onBackClick()
     }
 
-    // Cleanup on episode switch or player exit
+    // Cleanup on episode switch or player exit.
+    // Серия захватывается в замыкании эффекта: к моменту onDispose rememberUpdatedState
+    // уже обновился на новую серию, а позиция принадлежит старой.
     DisposableEffect(episode) {
+        val episodeAtEffect = episode
         onDispose {
-            saveCurrentProgress()
+            saveCurrentProgress(episodeAtEffect)
         }
     }
 
@@ -894,6 +946,12 @@ fun PlayerScreen(
                 },
                 update = { view ->
                     view.resizeMode = resizeMode
+                },
+                // PlayerView держит ссылку на плеер: отсоединяем его ДО release(),
+                // иначе при выходе из плеера возможен «Player accessed after release».
+                onRelease = { view ->
+                    view.player = null
+                    playerViewRef = null
                 },
                 modifier = Modifier
                     .fillMaxSize()
@@ -930,9 +988,15 @@ fun PlayerScreen(
                                 if (released == null && !isControlsLocked) {
                                     isHoldingLeft = true
                                     exoPlayer.setPlaybackSpeed(1.5f)
-                                    tryAwaitRelease()
-                                    isHoldingLeft = false
-                                    exoPlayer.setPlaybackSpeed(baseSpeed)
+                                    // tryAwaitRelease() бросает исключение при отмене жеста
+                                    // (палец вне зоны, свайп по родителю) — без finally
+                                    // скорость 1.5x «залипала» навсегда.
+                                    try {
+                                        tryAwaitRelease()
+                                    } finally {
+                                        isHoldingLeft = false
+                                        exoPlayer.setPlaybackSpeed(baseSpeed)
+                                    }
                                 }
                             }
                         )
@@ -991,9 +1055,14 @@ fun PlayerScreen(
                                 if (released == null && !isControlsLocked) {
                                     isHoldingRight = true
                                     exoPlayer.setPlaybackSpeed(2.0f)
-                                    tryAwaitRelease()
-                                    isHoldingRight = false
-                                    exoPlayer.setPlaybackSpeed(baseSpeed)
+                                    // finally обязателен: отмена жеста бросает исключение,
+                                    // иначе скорость 2.0x «залипает» навсегда.
+                                    try {
+                                        tryAwaitRelease()
+                                    } finally {
+                                        isHoldingRight = false
+                                        exoPlayer.setPlaybackSpeed(baseSpeed)
+                                    }
                                 }
                             }
                         )
@@ -1123,6 +1192,46 @@ fun PlayerScreen(
                         color = if (lastUpscaleEnabled) scheme.accent else scheme.textDim,
                     )
                 }
+            }
+        }
+
+        // =====================================================================
+        // HUD: Сообщение о загрузке (скачивание в галерею)
+        // =====================================================================
+        LaunchedEffect(downloadHudVisible) {
+            if (downloadHudVisible) {
+                delay(2600)
+                downloadHudVisible = false
+            }
+        }
+        var lastDownloadHudText by remember { mutableStateOf<String?>(null) }
+        if (downloadHudVisible) {
+            lastDownloadHudText = downloadHudText
+        }
+        AnimatedVisibility(
+            visible = downloadHudVisible,
+            enter = fadeIn(animationSpec = tween(150)) + scaleIn(initialScale = 0.9f, animationSpec = tween(150)),
+            exit = fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.9f, animationSpec = tween(200)),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 96.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MetroDimens.radiusSmall))
+                    .playerHaze(hazeState)
+                    .background(hudPillGlass)
+                    .border(1.dp, hudBorder, RoundedCornerShape(MetroDimens.radiusSmall))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = lastDownloadHudText ?: "",
+                    fontFamily = MetroFonts.headline,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = scheme.text,
+                )
             }
         }
 
@@ -1747,7 +1856,9 @@ fun PlayerScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // Скачать в галерею (текущая серия)
+                        // Скачать в галерею (текущая серия) / прогресс текущей загрузки
+                        val activeTask = currentDownloadTask
+                        val taskRunning = activeTask != null && activeTask.status.isActive
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1755,11 +1866,43 @@ fun PlayerScreen(
                                 .background(scheme.glass)
                                 .border(1.dp, scheme.stroke, RoundedCornerShape(8.dp))
                                 .metroClickable {
+                                    if (taskRunning) {
+                                        // Повторное нажатие — отмена загрузки
+                                        DownloadManager.cancel(anime.id, episode.ordinal)
+                                        downloadHudText = "Скачивание отменено"
+                                        downloadHudVisible = true
+                                        coroutineScope.launch {
+                                            delay(2000)
+                                            downloadHudVisible = false
+                                        }
+                                        return@metroClickable
+                                    }
                                     if (downloadRequestInFlight) return@metroClickable
                                     downloadRequestInFlight = true
-                                    downloadHudText = "Скачивание…"
+                                    // Разрешение на уведомления (Android 13+): без него
+                                    // не видно прогресса загрузки в шторке.
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                        ContextCompat.checkSelfPermission(
+                                            context,
+                                            android.Manifest.permission.POST_NOTIFICATIONS,
+                                        ) != PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        notificationsPermissionLauncher.launch(
+                                            android.Manifest.permission.POST_NOTIFICATIONS
+                                        )
+                                    }
+                                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+                                        ContextCompat.checkSelfPermission(
+                                            context,
+                                            android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                                        ) != PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        storagePermissionLauncher.launch(
+                                            android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                        )
+                                    }
                                     coroutineScope.launch {
-                                        val ok = runCatching {
+                                        val result = runCatching {
                                             // Берём уже готовые ссылки, если они есть (иначе резолвим)
                                             val online = streams.filterKeys { it != dev.metro.anime.data.model.OFFLINE_STREAM_KEY }
                                             val resolved = if (online.isNotEmpty()) {
@@ -1772,9 +1915,9 @@ fun PlayerScreen(
                                                 ?: resolved.keys.maxByOrNull { it.toIntOrNull() ?: 0 }
                                             val url = quality?.let { resolved[it] }
                                             if (url == null) {
-                                                error("нет ссылки")
+                                                "Не удалось получить ссылку на серию"
                                             } else {
-                                                DownloadManager.enqueue(
+                                                val accepted = DownloadManager.enqueue(
                                                     anime = anime.sanitized(),
                                                     episode = episode,
                                                     dubbingTitle = dubbingTitle,
@@ -1783,9 +1926,14 @@ fun PlayerScreen(
                                                     streamUrl = url,
                                                     durationSec = episode.durationSec,
                                                 )
+                                                if (accepted) {
+                                                    "Скачивание началось"
+                                                } else {
+                                                    "Серия уже скачана или уже в очереди"
+                                                }
                                             }
-                                        }.isSuccess
-                                        downloadHudText = if (ok) "Скачано в галерею" else "Не удалось скачать"
+                                        }.getOrElse { "Ошибка: ${it.message}" }
+                                        downloadHudText = result
                                         downloadHudVisible = true
                                         delay(2500)
                                         downloadHudVisible = false
@@ -1797,24 +1945,68 @@ fun PlayerScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Скачать в галерею",
+                                    text = when {
+                                        activeTask?.status == dev.metro.anime.data.model.DownloadStatus.REMUXING ->
+                                            "Обработка файла…"
+                                        taskRunning -> "Скачивание… ${((activeTask?.progress ?: 0f) * 100).toInt()}%"
+                                        activeTask?.status == dev.metro.anime.data.model.DownloadStatus.COMPLETED ->
+                                            "Уже скачано в галерею"
+                                        activeTask?.status == dev.metro.anime.data.model.DownloadStatus.FAILED ->
+                                            "Ошибка загрузки"
+                                        else -> "Скачать в галерею"
+                                    },
                                     fontFamily = MetroFonts.headline,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 12.sp,
-                                    color = scheme.text,
+                                    color = if (taskRunning) scheme.accent else scheme.text,
                                 )
                                 Text(
-                                    text = "Текущая серия в MP4",
+                                    text = when {
+                                        taskRunning && (activeTask?.downloadedBytes ?: 0L) > 0L ->
+                                            "${formatDownloadBytes(activeTask?.downloadedBytes ?: 0L)} • нажмите, чтобы отменить"
+                                        taskRunning -> "Нажмите, чтобы отменить"
+                                        else -> "Текущая серия в MP4"
+                                    },
                                     fontFamily = MetroFonts.text,
                                     fontSize = 10.sp,
                                     color = scheme.textDim,
                                 )
                             }
-                            Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Default.Download,
-                                contentDescription = null,
-                                tint = scheme.accent,
-                                modifier = Modifier.size(18.dp),
+                            if (taskRunning) {
+                                // Кольцевой индикатор прогресса
+                                Box(
+                                    modifier = Modifier.size(20.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        progress = { activeTask?.progress ?: 0f },
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = scheme.accent,
+                                        trackColor = scheme.stroke,
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    imageVector = androidx.compose.material.icons.Icons.Default.Download,
+                                    contentDescription = null,
+                                    tint = scheme.accent,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+
+                        // Полоса прогресса загрузки (видна, пока идёт скачивание)
+                        if (taskRunning) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { currentDownloadTask?.progress ?: 0f },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
+                                color = scheme.accent,
+                                trackColor = scheme.stroke,
                             )
                         }
 

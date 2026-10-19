@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 class DownloadService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var collector: Job? = null
+    private var lastStartId: Int = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -35,6 +36,7 @@ class DownloadService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        lastStartId = startId
         try {
             ServiceCompat.startForeground(
                 this,
@@ -54,8 +56,13 @@ class DownloadService : Service() {
             collector = scope.launch {
                 DownloadManager.tasks.collectLatest { tasks ->
                     if (tasks.none { it.status.isActive }) {
-                        stopForegroundCompat()
-                        stopSelf()
+                        // Перепроверяем: задача могла добавиться между сбором списка
+                        // и остановкой сервиса (тогда сервис нельзя останавливать).
+                        if (DownloadManager.tasks.value.none { it.status.isActive }) {
+                            stopForegroundCompat()
+                            // stopSelfResult(lastStartId) — не трогает более новые запросы старта
+                            stopSelfResult(lastStartId)
+                        }
                     } else {
                         notifyNotification(buildNotification(tasks))
                     }

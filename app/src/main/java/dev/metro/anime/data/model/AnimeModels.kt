@@ -169,6 +169,19 @@ fun AnimeTitle.sanitized(): AnimeTitle = copy(
 fun qualityLabel(quality: String): String =
     if (quality.toIntOrNull() != null) "${quality}p" else quality
 
+/** «1536» -> «1,5 МБ» — форматирование размера файла для UI. */
+fun formatDownloadBytes(bytes: Long): String {
+    if (bytes <= 0) return "0 МБ"
+    val kb = bytes / 1024.0
+    val mb = kb / 1024.0
+    val gb = mb / 1024.0
+    return when {
+        gb >= 1.0 -> String.format(java.util.Locale.US, "%.1f ГБ", gb).replace('.', ',')
+        mb >= 1.0 -> String.format(java.util.Locale.US, "%.0f МБ", mb)
+        else -> String.format(java.util.Locale.US, "%.0f КБ", kb)
+    }
+}
+
 fun WatchProgress.sanitized(): WatchProgress = copy(
     anime = anime.sanitized(),
     dubbingTitle = (dubbingTitle as String?).orEmpty(),
