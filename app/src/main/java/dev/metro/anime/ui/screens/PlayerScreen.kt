@@ -144,6 +144,7 @@ fun PlayerScreen(
     }
     var isResolvingStreams by remember { mutableStateOf(true) }
     var resolveError by remember { mutableStateOf<String?>(null) }
+    var currentLoadedUrl by remember(episode.ordinal) { mutableStateOf<String?>(null) }
 
     var isPlaying by remember { mutableStateOf(true) }
     var currentPositionMs by remember { mutableLongStateOf(0L) }
@@ -323,9 +324,17 @@ fun PlayerScreen(
                     }
                 }
 
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    android.util.Log.e("PlayerScreen", "player error: ${error.errorCodeName} ${error.message}", error)
+                }
+
                 override fun onPlaybackStateChanged(state: Int) {
                     isBuffering = (state == Player.STATE_BUFFERING)
                     isPlaybackEnded = (state == Player.STATE_ENDED)
+                    android.util.Log.d(
+                        "PlayerScreen",
+                        "state=$state pos=${currentPosition} buffered=${bufferedPosition} url=${currentLoadedUrl}"
+                    )
                     if (state == Player.STATE_READY) {
                         durationMs = duration.coerceAtLeast(0L)
                         if (seekTargetInitialMs > 0) {
@@ -707,8 +716,6 @@ fun PlayerScreen(
         }
     }
 
-    var currentLoadedUrl by remember(episode.ordinal) { mutableStateOf<String?>(null) }
-
     // Resolve streams
     LaunchedEffect(episode, source) {
         isResolvingStreams = true
@@ -723,6 +730,10 @@ fun PlayerScreen(
             val offline = if (dev.metro.anime.data.download.DownloadManager.isInitialized()) {
                 dev.metro.anime.data.download.DownloadManager.getDownloaded(currentAnime.id, episode.ordinal)
             } else null
+            android.util.Log.d(
+                "PlayerScreen",
+                "resolve: anime=${currentAnime.id} ord=${episode.ordinal} offline=${offline?.fileUri} source=$source"
+            )
             if (offline != null && offline.fileUri.isNotBlank()) {
                 streamsState = Pair(
                     mapOf(dev.metro.anime.data.model.OFFLINE_STREAM_KEY to offline.fileUri),
@@ -732,6 +743,7 @@ fun PlayerScreen(
                 return@LaunchedEffect
             }
             val resolved = repository.resolveEpisodeStream(episode, source)
+            android.util.Log.d("PlayerScreen", "resolve online keys=${resolved.keys} url=${resolved.values.firstOrNull()}")
             if (resolved.isNotEmpty()) {
                 val quality = when {
                     resolved.containsKey("1080") -> "1080"
@@ -760,6 +772,7 @@ fun PlayerScreen(
             } else {
                 exoPlayer.currentPosition.coerceAtLeast(0L)
             }
+            android.util.Log.d("PlayerScreen", "feed url=$streamUrl seek=$targetSeek")
             val metaBuilder = MediaMetadata.Builder()
                 .setTitle(currentAnime.titleRu.ifBlank { currentAnime.titleOrig ?: "" })
                 .setSubtitle("Серия ${currentEpisode.ordinal}${if (!currentEpisode.name.isNullOrBlank()) " — " + currentEpisode.name else ""}")
@@ -780,11 +793,21 @@ fun PlayerScreen(
     // Position tracking loop
     LaunchedEffect(exoPlayer, episode) {
         var lastSavedSec = 0L
+        var lastLogAt = 0L
         while (isActive) {
             val cur = exoPlayer.currentPosition.coerceAtLeast(0L)
             currentPositionMs = cur
             if (exoPlayer.duration > 0) {
                 durationMs = exoPlayer.duration
+            }
+            val now = System.currentTimeMillis()
+            if (now - lastLogAt > 3000) {
+                lastLogAt = now
+                android.util.Log.d(
+                    "PlayerScreen",
+                    "tick: state=${exoPlayer.playbackState} playing=${exoPlayer.isPlaying} pos=$cur " +
+                        "buffered=${exoPlayer.bufferedPosition} dur=${exoPlayer.duration} url=${currentLoadedUrl}"
+                )
             }
             val curSec = cur / 1000
             if (curSec > 3 && (curSec - lastSavedSec >= 5 || curSec < lastSavedSec)) {
