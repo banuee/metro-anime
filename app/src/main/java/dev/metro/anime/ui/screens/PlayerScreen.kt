@@ -57,9 +57,11 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import dev.metro.anime.data.download.DownloadManager
 import dev.metro.anime.data.model.AnimeEpisode
 import dev.metro.anime.data.model.AnimeSource
 import dev.metro.anime.data.model.AnimeTitle
+import dev.metro.anime.data.model.sanitized
 import dev.metro.anime.data.repository.AnimeRepository
 import kotlin.math.roundToInt
 import dev.metro.anime.data.settings.MetroSettingsRepository
@@ -139,6 +141,12 @@ fun PlayerScreen(
     var streamsState by remember { mutableStateOf<Pair<Map<String, String>, String>>(Pair(emptyMap(), "720")) }
     val streams = streamsState.first
     val selectedQuality = streamsState.second
+    // Скачанная серия (если есть) — отдельный источник со своим реальным качеством
+    var offlineDownload by remember { mutableStateOf<dev.metro.anime.data.model.DownloadedEpisode?>(null) }
+    // Скачивание текущей серии в галерею из меню настроек
+    var downloadRequestInFlight by remember { mutableStateOf(false) }
+    var downloadHudText by remember { mutableStateOf<String?>(null) }
+    var downloadHudVisible by remember { mutableStateOf(false) }
     fun updateQuality(newQuality: String) {
         streamsState = Pair(streamsState.first, newQuality)
     }
@@ -730,16 +738,29 @@ fun PlayerScreen(
             val offline = if (dev.metro.anime.data.download.DownloadManager.isInitialized()) {
                 dev.metro.anime.data.download.DownloadManager.getDownloaded(currentAnime.id, episode.ordinal)
             } else null
+            offlineDownload = offline
             android.util.Log.d(
                 "PlayerScreen",
                 "resolve: anime=${currentAnime.id} ord=${episode.ordinal} offline=${offline?.fileUri} source=$source"
             )
             if (offline != null && offline.fileUri.isNotBlank()) {
-                streamsState = Pair(
-                    mapOf(dev.metro.anime.data.model.OFFLINE_STREAM_KEY to offline.fileUri),
-                    dev.metro.anime.data.model.OFFLINE_STREAM_KEY,
-                )
+                // Скачанная серия играется по умолчанию, но онлайн-качества подгружаем
+                // в фоне, чтобы можно было переключиться на онлайн-источник.
+                streamsState = Pair(streamsState.first, dev.metro.anime.data.model.OFFLINE_STREAM_KEY)
                 isResolvingStreams = false
+                coroutineScope.launch {
+                    val online = try {
+                        repository.resolveEpisodeStream(episode, source)
+                    } catch (_: Exception) {
+                        emptyMap()
+                    }
+                    if (online.isNotEmpty()) {
+                        streamsState = Pair(
+                            online.filterKeys { it != dev.metro.anime.data.model.OFFLINE_STREAM_KEY },
+                            streamsState.second
+                        )
+                    }
+                }
                 return@LaunchedEffect
             }
             val resolved = repository.resolveEpisodeStream(episode, source)
@@ -764,7 +785,11 @@ fun PlayerScreen(
 
     // Feed URL to ExoPlayer
     LaunchedEffect(streamsState, episode) {
-        val streamUrl = streamsState.first[streamsState.second] ?: streamsState.first.values.firstOrNull()
+        val streamUrl = if (selectedQuality == dev.metro.anime.data.model.OFFLINE_STREAM_KEY) {
+            offlineDownload?.fileUri
+        } else {
+            streams[selectedQuality] ?: streams.values.firstOrNull()
+        }
         if (streamUrl != null && streamUrl != currentLoadedUrl) {
             currentLoadedUrl = streamUrl
             val targetSeek = if (seekTargetInitialMs > 0) {
@@ -1648,32 +1673,149 @@ fun PlayerScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Text(
-                            text = "Качество видео:",
-                            fontFamily = MetroFonts.text,
-                            fontSize = 11.sp,
-                            color = scheme.textDim,
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            streams.keys.sortedDescending().forEach { q ->
+                        // --- Секция «Скачано» ---
+                        if (offlineDownload != null) {
+                            Text(
+                                text = "Скачано",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 11.sp,
+                                color = scheme.textDim,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                val offlineLabel = dev.metro.anime.data.model.qualityLabel(offlineDownload?.quality ?: "720")
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(if (selectedQuality == q) scheme.accent else scheme.glass)
-                                        .border(1.dp, if (selectedQuality == q) scheme.accent else scheme.stroke, RoundedCornerShape(6.dp))
-                                        .metroClickable { updateQuality(q) }
+                                        .background(
+                                            if (selectedQuality == dev.metro.anime.data.model.OFFLINE_STREAM_KEY) scheme.accent
+                                            else scheme.glass
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (selectedQuality == dev.metro.anime.data.model.OFFLINE_STREAM_KEY) scheme.accent
+                                            else scheme.stroke,
+                                            RoundedCornerShape(6.dp)
+                                        )
+                                        .metroClickable {
+                                            updateQuality(dev.metro.anime.data.model.OFFLINE_STREAM_KEY)
+                                        }
                                         .padding(horizontal = 8.dp, vertical = 4.dp),
                                 ) {
                                     Text(
-                                        text = "${q}p",
+                                        text = offlineLabel,
                                         fontFamily = MetroFonts.headline,
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 11.sp,
-                                        color = if (selectedQuality == q) Color.White else scheme.text,
+                                        color = if (selectedQuality == dev.metro.anime.data.model.OFFLINE_STREAM_KEY) Color.White else scheme.text,
                                     )
                                 }
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        // --- Секция «Онлайн» ---
+                        if (streams.isNotEmpty()) {
+                            Text(
+                                text = "Онлайн",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 11.sp,
+                                color = scheme.textDim,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                streams.keys.sortedDescending().forEach { q ->
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (selectedQuality == q) scheme.accent else scheme.glass)
+                                            .border(1.dp, if (selectedQuality == q) scheme.accent else scheme.stroke, RoundedCornerShape(6.dp))
+                                            .metroClickable { updateQuality(q) }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    ) {
+                                        Text(
+                                            text = dev.metro.anime.data.model.qualityLabel(q),
+                                            fontFamily = MetroFonts.headline,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 11.sp,
+                                            color = if (selectedQuality == q) Color.White else scheme.text,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Скачать в галерею (текущая серия)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(scheme.glass)
+                                .border(1.dp, scheme.stroke, RoundedCornerShape(8.dp))
+                                .metroClickable {
+                                    if (downloadRequestInFlight) return@metroClickable
+                                    downloadRequestInFlight = true
+                                    downloadHudText = "Скачивание…"
+                                    coroutineScope.launch {
+                                        val ok = runCatching {
+                                            // Берём уже готовые ссылки, если они есть (иначе резолвим)
+                                            val online = streams.filterKeys { it != dev.metro.anime.data.model.OFFLINE_STREAM_KEY }
+                                            val resolved = if (online.isNotEmpty()) {
+                                                online
+                                            } else {
+                                                repository.resolveEpisodeStream(episode, source)
+                                                    .filterKeys { it != dev.metro.anime.data.model.OFFLINE_STREAM_KEY }
+                                            }
+                                            val quality = selectedQuality.takeIf { resolved.containsKey(it) }
+                                                ?: resolved.keys.maxByOrNull { it.toIntOrNull() ?: 0 }
+                                            val url = quality?.let { resolved[it] }
+                                            if (url == null) {
+                                                error("нет ссылки")
+                                            } else {
+                                                DownloadManager.enqueue(
+                                                    anime = anime.sanitized(),
+                                                    episode = episode,
+                                                    dubbingTitle = dubbingTitle,
+                                                    source = source,
+                                                    quality = quality ?: "720",
+                                                    streamUrl = url,
+                                                    durationSec = episode.durationSec,
+                                                )
+                                            }
+                                        }.isSuccess
+                                        downloadHudText = if (ok) "Скачано в галерею" else "Не удалось скачать"
+                                        downloadHudVisible = true
+                                        delay(2500)
+                                        downloadHudVisible = false
+                                        downloadRequestInFlight = false
+                                    }
+                                }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Скачать в галерею",
+                                    fontFamily = MetroFonts.headline,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp,
+                                    color = scheme.text,
+                                )
+                                Text(
+                                    text = "Текущая серия в MP4",
+                                    fontFamily = MetroFonts.text,
+                                    fontSize = 10.sp,
+                                    color = scheme.textDim,
+                                )
+                            }
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.Download,
+                                contentDescription = null,
+                                tint = scheme.accent,
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))

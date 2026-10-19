@@ -55,10 +55,10 @@ import kotlinx.coroutines.launch
 
 enum class HomeTab(val label: String, val pivotLabel: String) {
     LATEST("Свежие серии", "свежее"),
-    HISTORY("История", "история"),
-    DOWNLOADS("Скачано", "скачано"),
     SEARCH("Поиск", "поиск"),
+    HISTORY("История", "история"),
     BOOKMARKS("Избранное", "избранное"),
+    DOWNLOADS("Скачано", "скачано"),
     SETTINGS("Параметры", "параметры"),
 }
 
@@ -246,6 +246,7 @@ fun HomeScreen(
                     )
 
                     HomeTab.DOWNLOADS -> DownloadsTabContent(
+                        repository = repository,
                         downloads = downloadedEpisodes,
                         tasks = downloadTasks,
                         onPlay = onPlayDownloaded,
@@ -354,6 +355,7 @@ fun HomeScreen(
                     )
 
                     HomeTab.DOWNLOADS -> DownloadsTabContent(
+                        repository = repository,
                         downloads = downloadedEpisodes,
                         tasks = downloadTasks,
                         onPlay = onPlayDownloaded,
@@ -557,6 +559,7 @@ private fun HistoryTabContent(
 
 @Composable
 private fun DownloadsTabContent(
+    repository: AnimeRepository,
     downloads: List<DownloadedEpisode>,
     tasks: List<DownloadTask>,
     onPlay: (DownloadedEpisode) -> Unit,
@@ -565,6 +568,21 @@ private fun DownloadsTabContent(
 ) {
     val scheme = LocalMetroScheme.current
     val activeTasks = tasks.filter { it.status.isActive }
+
+    // Уточняем название/постер у записей, где их не было (старые загрузки)
+    LaunchedEffect(downloads) {
+        downloads.map { it.anime }
+            .distinctBy { it.id }
+            .filter { it.posterUrl.isBlank() || it.titleRu.isBlank() }
+            .forEach { anime ->
+                val details = try {
+                    repository.getAnimeDetails(anime.id, anime.shikimoriId, anime.titleRu.ifBlank { null })
+                } catch (_: Exception) {
+                    null
+                }
+                details?.title?.let { DownloadManager.updateAnimeMeta(anime.id, it) }
+            }
+    }
 
     if (downloads.isEmpty() && activeTasks.isEmpty()) {
         Box(

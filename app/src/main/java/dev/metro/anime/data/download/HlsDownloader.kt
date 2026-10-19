@@ -47,7 +47,7 @@ object HlsDownloader {
     ): Result = withContext(Dispatchers.IO) {
         val ctx = currentCoroutineContext()
         val workDir = File(context.cacheDir, "hls_downloads").apply { mkdirs() }
-        val safeName = displayName.replace(Regex("[^\\p{L}\\p{N}_\\- ]"), "_").take(80)
+        val safeName = displayName.replace(Regex("[^\\p{L}\\p{N}_\\- ()\\[\\]]"), "_").take(80)
         val tsFile = File(workDir, "$safeName.ts")
         val mp4File = File(workDir, "$safeName.mp4")
         try {
@@ -126,28 +126,41 @@ object HlsDownloader {
         }
     }
 
-    private fun remuxToMp4(ts: File, mp4: File, videoOnly: Boolean) {
+    /**
+     * Ремукс MPEG-TS -> MP4.
+     *
+     * Особенности исходников (проверено на реальных файлах, см. history.md):
+     *  - MediaExtractor отдаёт видео уже в AVCC (length-prefixed) — в MP4 пишем как есть;
+     *  - аудио приходит СЫРЫМИ AAC-кадрами (без ADTS-заголовков), по одному кадру на сэмпл.
+     *    Разбирать ADTS нельзя: в потоке регулярно встречаются ложные синх-слова 0xFFFx,
+     *    и такой «кадр» портит весь аудиотрек (декодер AAC встаёт, звук пропадает);
+     *  - PTS видео в исходнике немонотонны (B-кадры), а MediaMuxer из-за этого пишет
+     *    сломанные stts, и файл не играет (позиция 0, уход в BUFFERING). Поэтому видео
+     *    переводим в равномерный CFR-таймлайн.
+     */
+    fun remuxToMp4(ts: File, mp4: File, videoOnly: Boolean) {
         val plan = scanTracks(ts, videoOnly)
         if (plan.videoTrack < 0 && plan.audioTrack < 0) throw IllegalStateException("Дорожки не найдены")
         muxTracks(ts, mp4, plan)
     }
 
+    private class MuxPlan(
+        val videoTrack: Int,
+        val audioTrack: Int,
+        val videoSamples: Int,
+        val videoFrameUs: Long,
+        val videoBasePts: Long,
+        val audioSamples: Int,
+    )
+
     /**
-     * Первый проход по TS: считаем количество сэмплов, находим длительность дорожек и
-     * количество ADTS-кадров в аудио (MediaExtractor отдаёт по несколько AAC-кадров в одном сэмпле).
+     * Первый проход по TS: количество сэмплов по дорожкам и растяжка времени по видео.
      */
     private fun scanTracks(ts: File, videoOnly: Boolean): MuxPlan {
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(ts.absolutePath)
-
-            var videoTrack = -1
-            var audioTrack = -1
-            for (i in 0 until extractor.trackCount) {
-                val mime = extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME) ?: continue
-                if (mime.startsWith("video/") && videoTrack < 0) videoTrack = i
-                else if (mime.startsWith("audio/") && audioTrack < 0 && !videoOnly) audioTrack = i
-            }
+            val (videoTrack, audioTrack) = findTracks(extractor, videoOnly)
             if (videoTrack < 0 && audioTrack < 0) throw IllegalStateException("Дорожки не найдены")
 
             // Без selectTrack экстрактор не продвигается по сэмплам и отдаёт одни и те же данные
@@ -159,12 +172,7 @@ object HlsDownloader {
             var videoMinPts = Long.MAX_VALUE
             var videoMaxPts = Long.MIN_VALUE
             var audioSamples = 0
-            var audioFrames = 0
-            var audioMinPts = Long.MAX_VALUE
-            var audioMaxPts = Long.MIN_VALUE
-            var asc: ByteArray? = null
-
-            val scratch = ByteBuffer.allocate(4 * 1024 * 1024)
+            val scratch = ByteBuffer.allocate(1024 * 1024)
             while (true) {
                 val track = extractor.sampleTrackIndex
                 if (track < 0) break
@@ -177,65 +185,41 @@ object HlsDownloader {
                     if (pts > videoMaxPts) videoMaxPts = pts
                 } else if (track == audioTrack) {
                     audioSamples++
-                    if (pts < audioMinPts) audioMinPts = pts
-                    if (pts > audioMaxPts) audioMaxPts = pts
-                    val frames = splitAdtsFrames(scratch, size)
-                    audioFrames += frames.size
-                    if (asc == null && frames.isNotEmpty()) {
-                        val header = ByteArray(frames.first().headerLen)
-                        val dup = scratch.duplicate()
-                        dup.position(frames.first().offset)
-                        dup.limit(frames.first().offset + frames.first().headerLen)
-                        dup.get(header, 0, header.size)
-                        asc = buildAsc(header)
-                    }
                 }
                 extractor.advance()
             }
 
-            val videoDurationUs = if (videoSamples > 1) (videoMaxPts - videoMinPts).coerceAtLeast(1L) else 0L
-            val videoFrameUs = if (videoSamples > 1) videoDurationUs / (videoSamples - 1) else 0L
-            val audioDurationUs = if (audioSamples > 1) (audioMaxPts - audioMinPts).coerceAtLeast(1L) else 0L
-            val audioFrameUs = if (audioFrames > 0) {
-                val raw = audioDurationUs / audioFrames
-                raw.coerceAtLeast(1000L)
-            } else 0L
-
-            return MuxPlan(
-                videoTrack = videoTrack,
-                audioTrack = audioTrack,
-                videoSamples = videoSamples,
-                videoFrameUs = videoFrameUs,
-                audioFrameUs = audioFrameUs,
-                audioFrames = audioFrames,
-                asc = asc,
-            ).also {
-                Log.d(
-                    TAG,
-                    "remux plan: video=${it.videoSamples} samples frame=${it.videoFrameUs}us " +
-                        "audio=${it.audioFrames} adts frames frame=${it.audioFrameUs}us"
-                )
+            val videoFrameUs = if (videoSamples > 1) {
+                ((videoMaxPts - videoMinPts) / (videoSamples - 1)).coerceAtLeast(1000L)
+            } else {
+                0L
             }
+            val videoBasePts = if (videoMinPts == Long.MAX_VALUE) 0L else videoMinPts
+
+            Log.d(
+                TAG,
+                "remux plan: video=$videoSamples samples frame=${videoFrameUs}us base=$videoBasePts " +
+                    "audio=$audioSamples samples (raw AAC, без ADTS)"
+            )
+            return MuxPlan(videoTrack, audioTrack, videoSamples, videoFrameUs, videoBasePts, audioSamples)
         } finally {
             extractor.release()
         }
     }
 
-    private class MuxPlan(
-        val videoTrack: Int,
-        val audioTrack: Int,
-        val videoSamples: Int,
-        val videoFrameUs: Long,
-        val audioFrameUs: Long,
-        val audioFrames: Int,
-        val asc: ByteArray?,
-    )
+    private fun findTracks(extractor: MediaExtractor, videoOnly: Boolean): Pair<Int, Int> {
+        var videoTrack = -1
+        var audioTrack = -1
+        for (i in 0 until extractor.trackCount) {
+            val mime = extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME) ?: continue
+            if (mime.startsWith("video/") && videoTrack < 0) videoTrack = i
+            else if (mime.startsWith("audio/") && audioTrack < 0 && !videoOnly) audioTrack = i
+        }
+        return videoTrack to audioTrack
+    }
 
     /**
-     * Второй проход: пишем в MP4 сэмплы с равномерным CFR-таймлайном.
-     * Исходные PTS из MPEG-TS немонотонны (B-кадры), из-за чего MediaMuxer пишет
-     * сломанные stts/ctts и файл не играет в ExoPlayer. Аудио-семплы дополнительно
-     * делим на отдельные ADTS-кадры, иначе декодер съедает только первый кадр.
+     * Второй проход: пишем в MP4 с равномерным CFR-таймлайном по видео и исходными PTS по аудио.
      */
     private fun muxTracks(ts: File, mp4: File, plan: MuxPlan) {
         val extractor = MediaExtractor()
@@ -249,10 +233,11 @@ object HlsDownloader {
                 muxVideo = muxer.addTrack(extractor.getTrackFormat(plan.videoTrack))
             }
             if (plan.audioTrack >= 0) {
+                // Формат аудио берём из экстрактора как есть: там уже есть корректный
+                // AudioSpecificConfig (csd-0), без него AAC-декодер не сконфигурируется.
                 val audioFormat = extractor.getTrackFormat(plan.audioTrack)
-                // Без csd-0 (AudioSpecificConfig) декодер AAC не сможет ничего распаковать
-                if (plan.asc != null && !audioFormat.containsKey("csd-0")) {
-                    audioFormat.setByteBuffer("csd-0", ByteBuffer.wrap(plan.asc))
+                if (!audioFormat.containsKey("csd-0")) {
+                    Log.w(TAG, "remux: у аудиодорожки нет csd-0, звук может не воспроизводиться")
                 }
                 muxAudio = muxer.addTrack(audioFormat)
             }
@@ -266,7 +251,6 @@ object HlsDownloader {
                 val buffer = ByteBuffer.allocate(4 * 1024 * 1024)
                 val info = MediaCodec.BufferInfo()
                 var videoIndex = 0L
-                var audioIndex = 0L
 
                 while (true) {
                     val track = extractor.sampleTrackIndex
@@ -279,29 +263,17 @@ object HlsDownloader {
                     if (track == plan.videoTrack && muxVideo >= 0) {
                         info.offset = 0
                         info.size = size
-                        info.presentationTimeUs = videoIndex * plan.videoFrameUs
+                        info.presentationTimeUs = plan.videoBasePts + videoIndex * plan.videoFrameUs
                         info.flags = if (isSync) MediaCodec.BUFFER_FLAG_KEY_FRAME else 0
                         muxer.writeSampleData(muxVideo, buffer, info)
                         videoIndex++
                     } else if (track == plan.audioTrack && muxAudio >= 0) {
-                        val frames = splitAdtsFrames(buffer, size)
-                        if (frames.isEmpty()) {
-                            info.offset = 0
-                            info.size = size
-                            info.presentationTimeUs = originalPts
-                            info.flags = 0
-                            muxer.writeSampleData(muxAudio, buffer, info)
-                        } else {
-                            for (frame in frames) {
-                                // В MP4 AAC пишется без ADTS-заголовка
-                                info.offset = frame.offset + frame.headerLen
-                                info.size = frame.size - frame.headerLen
-                                info.presentationTimeUs = audioIndex * plan.audioFrameUs
-                                info.flags = 0
-                                muxer.writeSampleData(muxAudio, buffer, info)
-                                audioIndex++
-                            }
-                        }
+                        // Сырые AAC-кадры (без ADTS) — пишем как есть, сохраняя исходные PTS.
+                        info.offset = 0
+                        info.size = size
+                        info.presentationTimeUs = originalPts
+                        info.flags = 0
+                        muxer.writeSampleData(muxAudio, buffer, info)
                     }
                     extractor.advance()
                 }
@@ -319,58 +291,6 @@ object HlsDownloader {
             extractor.release()
         }
     }
-
-    private data class AdtsFrame(val offset: Int, val size: Int, val headerLen: Int)
-
-    /**
-     * Разбивает ADTS-буфер на отдельные AAC-кадры (в сэмпле их может быть несколько).
-     * В MP4 AAC хранится без ADTS-заголовков, поэтому возвращаем и длину заголовка,
-     * и смещение полезной нагрузки.
-     */
-    private fun splitAdtsFrames(buffer: ByteBuffer, size: Int): List<AdtsFrame> {
-        if (size < 7) return emptyList()
-        val data = ByteArray(size)
-        val dup = buffer.duplicate()
-        dup.position(0)
-        dup.limit(size)
-        dup.get(data, 0, size)
-
-        val frames = mutableListOf<AdtsFrame>()
-        var pos = 0
-        while (pos + 7 <= size) {
-            if ((data[pos].toInt() and 0xFF) != 0xFF || (data[pos + 1].toInt() and 0xF0) != 0xF0) break
-            val frameLen = ((data[pos + 3].toInt() and 0x03) shl 11) or
-                    ((data[pos + 4].toInt() and 0xFF) shl 3) or
-                    ((data[pos + 5].toInt() and 0xE0) shr 5)
-            val headerLen = if ((data[pos + 1].toInt() and 0x01) == 1) 9 else 7
-            if (frameLen <= headerLen || pos + frameLen > size) break
-            frames.add(AdtsFrame(pos, frameLen, headerLen))
-            pos += frameLen
-        }
-        return frames
-    }
-
-    private fun countAdtsFrames(buffer: ByteBuffer, size: Int): Int = splitAdtsFrames(buffer, size).size
-
-    /**
-     * Строит AudioSpecificConfig (2 байта) из ADTS-заголовка — без него декодер AAC
-     * в MP4 не может быть сконфигурирован и не выдаёт ни одного фрейма.
-     */
-    private fun buildAsc(header: ByteArray): ByteArray? {
-        if (header.size < 7) return null
-        val freqIndex = ((header[2].toInt() and 0x3C) shr 2)
-        val channelConfig = ((header[2].toInt() and 0x01) shl 2) or ((header[3].toInt() and 0xC0) shr 6)
-        val profileField = ((header[2].toInt() and 0xC0) shr 6)
-        if (freqIndex > 12 || channelConfig == 0) return null
-        // Поддерживаем только AAC-LC (в ADTS profile field = 1) — для остальных нужен csd-0 экстрактора
-        if (profileField != 1) return null
-        val objectType = 2
-        val b0 = (objectType shl 3) or (freqIndex shr 1)
-        val b1 = ((freqIndex and 1) shl 7) or (channelConfig shl 3)
-        return byteArrayOf(b0.toByte(), b1.toByte())
-    }
-
-
 
     private fun saveToMediaStore(context: Context, src: File, displayName: String): Result {
         val resolver = context.contentResolver

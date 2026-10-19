@@ -165,6 +165,10 @@ fun AnimeTitle.sanitized(): AnimeTitle = copy(
     source = source ?: AnimeSource.ANILIBRIA,
 )
 
+/** «720» -> «720p», «Офлайн» -> «Офлайн» */
+fun qualityLabel(quality: String): String =
+    if (quality.toIntOrNull() != null) "${quality}p" else quality
+
 fun WatchProgress.sanitized(): WatchProgress = copy(
     anime = anime.sanitized(),
     dubbingTitle = (dubbingTitle as String?).orEmpty(),

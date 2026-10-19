@@ -155,6 +155,28 @@ object DownloadManager {
         records.forEach { removeDownload(animeId, it.episodeOrdinal) }
     }
 
+    /**
+     * Уточняет название и постер у уже скачанных серий (например, по данным Shikimori):
+     * в записи могло сохраниться обрезанное название из поисковой выдачи.
+     */
+    fun updateAnimeMeta(animeId: String, title: AnimeTitle) {
+        var changed = false
+        _downloads.value = _downloads.value.map { record ->
+            if (record.anime.id != animeId) {
+                record
+            } else {
+                val merged = record.anime.copy(
+                    titleRu = title.titleRu.ifBlank { record.anime.titleRu },
+                    posterUrl = title.posterUrl.ifBlank { record.anime.posterUrl },
+                    shikimoriId = title.shikimoriId ?: record.anime.shikimoriId,
+                )
+                if (merged != record.anime) changed = true
+                record.copy(anime = merged)
+            }
+        }
+        if (changed) persistDownloads()
+    }
+
     private fun ensureWorker() {
         if (worker?.isActive == true) return
         worker = scope.launch {
@@ -166,6 +188,8 @@ object DownloadManager {
                 jobs.remove(next.id)
             }
             DownloadService.stop(appContext)
+            // Завершённые и упавшие задачи не нужны — убираем, чтобы список не разрастался
+            clearFinishedTasks()
         }
     }
 
