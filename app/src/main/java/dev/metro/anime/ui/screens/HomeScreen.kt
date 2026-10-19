@@ -622,7 +622,7 @@ private fun DownloadsTabContent(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Откройте серию в плеере и нажмите\n«Скачать в галерею» в параметрах видео",
+                    text = "Серии можно скачивать в плеере для просмотра офлайн",
                     fontFamily = MetroFonts.text,
                     fontSize = 12.sp,
                     color = scheme.textDim.copy(alpha = 0.7f),

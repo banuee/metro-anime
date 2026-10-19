@@ -1947,30 +1947,29 @@ fun PlayerScreen(
                                 Text(
                                     text = when {
                                         activeTask?.status == dev.metro.anime.data.model.DownloadStatus.REMUXING ->
-                                            "Обработка файла…"
+                                            "Обработка…"
                                         taskRunning -> "Скачивание… ${((activeTask?.progress ?: 0f) * 100).toInt()}%"
                                         activeTask?.status == dev.metro.anime.data.model.DownloadStatus.COMPLETED ->
-                                            "Уже скачано в галерею"
+                                            "Скачано"
                                         activeTask?.status == dev.metro.anime.data.model.DownloadStatus.FAILED ->
-                                            "Ошибка загрузки"
-                                        else -> "Скачать в галерею"
+                                            "Ошибка"
+                                        else -> "Скачать"
                                     },
                                     fontFamily = MetroFonts.headline,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 12.sp,
                                     color = if (taskRunning) scheme.accent else scheme.text,
                                 )
-                                Text(
-                                    text = when {
-                                        taskRunning && (activeTask?.downloadedBytes ?: 0L) > 0L ->
-                                            "${formatDownloadBytes(activeTask?.downloadedBytes ?: 0L)} • нажмите, чтобы отменить"
-                                        taskRunning -> "Нажмите, чтобы отменить"
-                                        else -> "Текущая серия в MP4"
-                                    },
-                                    fontFamily = MetroFonts.text,
-                                    fontSize = 10.sp,
-                                    color = scheme.textDim,
-                                )
+                                if (taskRunning) {
+                                    val downloadedBytes = activeTask?.downloadedBytes ?: 0L
+                                    val progressInfo = if (downloadedBytes > 0L) "${formatDownloadBytes(downloadedBytes)} • " else ""
+                                    Text(
+                                        text = "${progressInfo}Отменить",
+                                        fontFamily = MetroFonts.text,
+                                        fontSize = 10.sp,
+                                        color = scheme.textDim,
+                                    )
+                                }
                             }
                             if (taskRunning) {
                                 // Кольцевой индикатор прогресса
@@ -2027,26 +2026,19 @@ fun PlayerScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "AI-Апскейл (CAS)",
-                                    fontFamily = MetroFonts.headline,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 12.sp,
-                                    color = if (isUpscaleEnabled) scheme.accent else scheme.text,
-                                )
-                                Text(
-                                    text = "Четкость контуров без лагов",
-                                    fontFamily = MetroFonts.text,
-                                    fontSize = 10.sp,
-                                    color = scheme.textDim,
-                                )
-                            }
+                            Text(
+                                text = "AI-Апскейл (CAS)",
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                color = if (isUpscaleEnabled) scheme.accent else scheme.text,
+                                modifier = Modifier.weight(1f),
+                            )
                             Switch(
                                 checked = isUpscaleEnabled,
                                 onCheckedChange = {
-                                    isUpscaleEnabled = it
-                                    upscaleHudVisible = true
+                                     isUpscaleEnabled = it
+                                     upscaleHudVisible = true
                                 },
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = scheme.accent,
@@ -2101,7 +2093,7 @@ fun PlayerScreen(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = "Акриловый блюр",
+                                text = "Размытие фона",
                                 fontFamily = MetroFonts.headline,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 11.sp,
@@ -2263,7 +2255,7 @@ fun PlayerScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.FullscreenExit,
-                                contentDescription = "Выйти из плеера",
+                                contentDescription = "Назад",
                                 tint = scheme.text,
                                 modifier = Modifier.size(22.dp),
                             )

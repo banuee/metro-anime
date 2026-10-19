@@ -63,7 +63,7 @@ object AutoUpdateNotificationHelper {
         val cleanChangelog = if (info.changelog.isNotBlank() && info.changelog != "Нет описания изменений.") {
             info.changelog.take(300)
         } else {
-            "Нажмите, чтобы загрузить и установить обновление."
+            "Доступна новая версия для установки."
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)

@@ -318,21 +318,14 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Размытие фона (блюр)",
-                                fontFamily = MetroFonts.headline,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp,
-                                color = scheme.text,
-                            )
-                            Text(
-                                text = "Мягкий акриловый фрост для читаемости",
-                                fontFamily = MetroFonts.text,
-                                fontSize = 12.sp,
-                                color = scheme.textDim,
-                            )
-                        }
+                        Text(
+                            text = "Размытие фона",
+                            fontFamily = MetroFonts.headline,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp,
+                            color = scheme.text,
+                            modifier = Modifier.weight(1f),
+                        )
                         Switch(
                             checked = settings.blurEnabled,
                             onCheckedChange = { settingsRepo.setBlurEnabled(it) },
@@ -449,20 +442,13 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Акриловый блюр в плеере",
-                                fontFamily = MetroFonts.text,
-                                fontSize = 14.sp,
-                                color = scheme.text,
-                            )
-                            Text(
-                                text = "Размытие фона под кнопками и оверлеями плеера",
-                                fontFamily = MetroFonts.text,
-                                fontSize = 11.sp,
-                                color = scheme.textDim,
-                            )
-                        }
+                        Text(
+                            text = "Размытие в плеере",
+                            fontFamily = MetroFonts.text,
+                            fontSize = 14.sp,
+                            color = scheme.text,
+                            modifier = Modifier.weight(1f),
+                        )
                         Switch(
                             checked = settings.playerBlurEnabled,
                             onCheckedChange = { settingsRepo.setPlayerBlurEnabled(it) },
@@ -718,7 +704,7 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Text(
-                                text = "Оттенок (Hue)",
+                                text = "Оттенок",
                                 fontFamily = MetroFonts.text,
                                 fontSize = 12.sp,
                                 color = scheme.text,
@@ -769,7 +755,7 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Text(
-                                text = "Насыщенность (Saturation)",
+                                text = "Насыщенность",
                                 fontFamily = MetroFonts.text,
                                 fontSize = 12.sp,
                                 color = scheme.text,
@@ -820,7 +806,7 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Text(
-                                text = "Яркость (Brightness)",
+                                text = "Яркость",
                                 fontFamily = MetroFonts.text,
                                 fontSize = 12.sp,
                                 color = scheme.text,
@@ -1429,21 +1415,13 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Column {
-                                Text(
-                                    text = "Авто-синхронизация",
-                                    fontFamily = MetroFonts.headline,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 12.sp,
-                                    color = scheme.text,
-                                )
-                                Text(
-                                    text = "Обновлять при каждом входе в приложение",
-                                    fontFamily = MetroFonts.text,
-                                    fontSize = 11.sp,
-                                    color = scheme.textDim,
-                                )
-                            }
+                            Text(
+                                text = "Авто-синхронизация",
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                color = scheme.text,
+                            )
                             Switch(
                                 checked = autoSyncEnabled,
                                 onCheckedChange = { actualSyncClient.setAutoSyncEnabled(it) },
@@ -1527,13 +1505,6 @@ fun SettingsScreen(
                         }
                     }
 
-                    Text(
-                        text = "Экспорт и импорт всех настроек, фоновых обоев, закладок избранного и полной истории просмотров с прогрессом серий в один портативный файл .json.",
-                        color = scheme.textDim,
-                        fontSize = 12.sp,
-                        fontFamily = MetroFonts.text,
-                        lineHeight = 16.sp,
-                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1597,21 +1568,13 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column {
-                            Text(
-                                text = "Занято кэшем",
-                                fontFamily = MetroFonts.headline,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp,
-                                color = scheme.text,
-                            )
-                            Text(
-                                text = "Обложки аниме и временные файлы",
-                                fontFamily = MetroFonts.text,
-                                fontSize = 12.sp,
-                                color = scheme.textDim,
-                            )
-                        }
+                        Text(
+                            text = "Занято кэшем",
+                            fontFamily = MetroFonts.headline,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp,
+                            color = scheme.text,
+                        )
 
                         Text(
                             text = sizeText,
