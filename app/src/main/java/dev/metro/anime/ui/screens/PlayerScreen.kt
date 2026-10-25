@@ -38,8 +38,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.metro.anime.data.api.ApiClient
+import dev.metro.anime.data.model.SubtitleTrack
+import java.util.Locale
+import java.util.regex.Pattern
 import android.content.Intent
 import android.view.KeyEvent
 import androidx.compose.ui.viewinterop.AndroidView
@@ -90,6 +95,52 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+
+data class SubtitleCue(
+    val startMs: Long,
+    val endMs: Long,
+    val text: String,
+)
+
+private fun parseTimestampToMs(h: String?, m: String?, s: String?, ms: String?): Long {
+    val hours = h?.removeSuffix(":")?.toLongOrNull() ?: 0L
+    val minutes = m?.toLongOrNull() ?: 0L
+    val seconds = s?.toLongOrNull() ?: 0L
+    val millis = ms?.toLongOrNull() ?: 0L
+    return (hours * 3600 + minutes * 60 + seconds) * 1000 + millis
+}
+
+private fun parseSubtitles(content: String): List<SubtitleCue> {
+    if (content.isBlank()) return emptyList()
+    val cues = mutableListOf<SubtitleCue>()
+    val lines = content.lines()
+    var i = 0
+    val timePattern = Pattern.compile("(\\d{1,2}:)?(\\d{2}):(\\d{2})[.,](\\d{3})\\s*-->\\s*(\\d{1,2}:)?(\\d{2}):(\\d{2})[.,](\\d{3})")
+
+    while (i < lines.size) {
+        val line = lines[i].trim()
+        val matcher = timePattern.matcher(line)
+        if (matcher.find()) {
+            val startMs = parseTimestampToMs(matcher.group(1), matcher.group(2), matcher.group(3), matcher.group(4))
+            val endMs = parseTimestampToMs(matcher.group(5), matcher.group(6), matcher.group(7), matcher.group(8))
+            i++
+            val textBuilder = StringBuilder()
+            while (i < lines.size && lines[i].isNotBlank()) {
+                val cleanLine = lines[i].replace(Regex("<[^>]+>"), "").trim()
+                if (cleanLine.isNotBlank()) {
+                    if (textBuilder.isNotEmpty()) textBuilder.append("\n")
+                    textBuilder.append(cleanLine)
+                }
+                i++
+            }
+            if (textBuilder.isNotEmpty() && endMs > startMs) {
+                cues.add(SubtitleCue(startMs, endMs, textBuilder.toString()))
+            }
+        }
+        i++
+    }
+    return cues
+}
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -195,6 +246,12 @@ fun PlayerScreen(
 
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showSubtitlesDialog by remember { mutableStateOf(false) }
+    var availableSubtitles by remember { mutableStateOf<List<SubtitleTrack>>(emptyList()) }
+    var selectedSubtitle by remember { mutableStateOf<SubtitleTrack?>(null) }
+    var subtitleOffsetSec by remember { mutableFloatStateOf(0f) }
+    var subtitleFontSize by remember { mutableStateOf(20.sp) }
+    var parsedCues by remember { mutableStateOf<List<SubtitleCue>>(emptyList()) }
 
     var seekCumulativeSeconds by remember { mutableStateOf(0) }
     var seekIndicatorSide by remember { mutableStateOf(0) } // -1 left, +1 right
@@ -816,14 +873,40 @@ fun PlayerScreen(
                     else -> resolved.keys.first()
                 }
                 streamsState = Pair(resolved, quality)
+                val hiSkip = repository.getHiAnimeSkip(episode)
+                if (hiSkip != null) {
+                    if (activeOpening == null && hiSkip.first != null) activeOpening = hiSkip.first
+                    if (activeEnding == null && hiSkip.second != null) activeEnding = hiSkip.second
+                }
             } else {
                 resolveError = "Не удалось получить видеопоток."
+            }
+
+            coroutineScope.launch {
+                val subs = repository.fetchAllAvailableSubtitles(currentAnime, episode)
+                availableSubtitles = subs
+                if (selectedSubtitle == null) {
+                    if (source == AnimeSource.HIANIME || currentDubbingTitle.contains("English", ignoreCase = true) || currentDubbingTitle.contains("англ", ignoreCase = true)) {
+                        selectedSubtitle = subs.firstOrNull { it.isDefault } ?: subs.firstOrNull()
+                    }
+                }
             }
         } catch (e: Exception) {
             resolveError = "Ошибка: ${e.localizedMessage}"
         } finally {
             isResolvingStreams = false
         }
+    }
+
+    // Load and parse subtitle cues
+    LaunchedEffect(selectedSubtitle) {
+        val sub = selectedSubtitle
+        if (sub == null) {
+            parsedCues = emptyList()
+            return@LaunchedEffect
+        }
+        val text = ApiClient.fetchSubtitleText(sub.url)
+        parsedCues = parseSubtitles(text)
     }
 
     // Feed URL to ExoPlayer
@@ -1434,6 +1517,47 @@ fun PlayerScreen(
         }
 
         // =====================================================================
+        // Subtitle Text Overlay
+        // =====================================================================
+        if (selectedSubtitle != null && parsedCues.isNotEmpty()) {
+            val effectivePosMs = (currentPositionMs + (subtitleOffsetSec * 1000).toLong()).coerceAtLeast(0L)
+            val currentCue = parsedCues.firstOrNull { effectivePosMs in it.startMs..it.endMs }
+            if (currentCue != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = if (showControls) 76.dp else 22.dp)
+                        .padding(horizontal = 48.dp),
+                    contentAlignment = Alignment.BottomCenter,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.65f))
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            text = currentCue.text,
+                            color = Color.White,
+                            fontSize = subtitleFontSize,
+                            fontFamily = MetroFonts.text,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center,
+                            lineHeight = subtitleFontSize * 1.25f,
+                            style = androidx.compose.ui.text.TextStyle(
+                                shadow = androidx.compose.ui.graphics.Shadow(
+                                    color = Color.Black,
+                                    blurRadius = 6f,
+                                    offset = androidx.compose.ui.geometry.Offset(1f, 1f),
+                                )
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+
+        // =====================================================================
         // Metro Acrylic Controls Overlay (Top Pills + Bottom Dock)
         // =====================================================================
         AnimatedVisibility(
@@ -1627,7 +1751,21 @@ fun PlayerScreen(
                         }
 
                         IconButton(onClick = {
+                            showSubtitlesDialog = !showSubtitlesDialog
+                            showSettingsDialog = false
+                            showSpeedDialog = false
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.ClosedCaption,
+                                contentDescription = "Субтитры",
+                                tint = if (selectedSubtitle != null) scheme.accent else scheme.text,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+
+                        IconButton(onClick = {
                             showSettingsDialog = !showSettingsDialog
+                            showSubtitlesDialog = false
                             showSpeedDialog = false
                         }) {
                             Icon(
@@ -2160,6 +2298,222 @@ fun PlayerScreen(
                                 color = scheme.textDim,
                                 maxLines = 1,
                             )
+                        }
+                    }
+                }
+
+                // -------------------------------------------------------------
+                // Subtitles Popup Card (Under top right bar)
+                // -------------------------------------------------------------
+                AnimatedVisibility(
+                    visible = showSubtitlesDialog,
+                    enter = fadeIn(animationSpec = tween(180)) +
+                            scaleIn(initialScale = 0.90f, animationSpec = tween(180)) +
+                            slideInVertically(animationSpec = tween(180)) { -it / 6 },
+                    exit = fadeOut(animationSpec = tween(150)) +
+                            scaleOut(targetScale = 0.90f, animationSpec = tween(150)) +
+                            slideOutVertically(animationSpec = tween(150)) { -it / 6 },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 70.dp, end = 20.dp),
+                ) {
+                    val configuration = LocalConfiguration.current
+                    val maxMenuHeight = (configuration.screenHeightDp.dp - 150.dp).coerceAtLeast(160.dp)
+                    Column(
+                        modifier = Modifier
+                            .width(320.dp)
+                            .heightIn(max = maxMenuHeight)
+                            .clip(RoundedCornerShape(12.dp))
+                            .playerHaze(hazeState)
+                            .background(hudCardGlass)
+                            .border(1.dp, hudBorder, RoundedCornerShape(12.dp))
+                            .padding(14.dp)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        // Title + Close
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Субтитры",
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                color = scheme.text,
+                            )
+                            IconButton(
+                                onClick = { showSubtitlesDialog = false },
+                                modifier = Modifier.size(20.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Закрыть",
+                                    tint = scheme.textDim,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Track selector
+                        Text(
+                            text = "Дорожка",
+                            fontFamily = MetroFonts.text,
+                            fontSize = 11.sp,
+                            color = scheme.textDim,
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        val isOff = selectedSubtitle == null
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isOff) scheme.accent.copy(alpha = 0.2f) else scheme.glass)
+                                .border(1.dp, if (isOff) scheme.accent else scheme.stroke, RoundedCornerShape(6.dp))
+                                .metroClickable { selectedSubtitle = null }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                        ) {
+                            Text(
+                                text = "Выключены",
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = if (isOff) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 11.sp,
+                                color = if (isOff) scheme.accent else scheme.text,
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        if (availableSubtitles.isEmpty()) {
+                            Text(
+                                text = "Дорожки не найдены",
+                                fontFamily = MetroFonts.text,
+                                fontSize = 10.sp,
+                                color = scheme.textDim,
+                                modifier = Modifier.padding(vertical = 4.dp),
+                            )
+                        } else {
+                            availableSubtitles.forEach { sub ->
+                                val isSelected = selectedSubtitle?.url == sub.url
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(if (isSelected) scheme.accent.copy(alpha = 0.2f) else scheme.glass)
+                                        .border(1.dp, if (isSelected) scheme.accent else scheme.stroke, RoundedCornerShape(6.dp))
+                                        .metroClickable { selectedSubtitle = sub }
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                ) {
+                                    Text(
+                                        text = sub.label,
+                                        fontFamily = MetroFonts.headline,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 11.sp,
+                                        color = if (isSelected) scheme.accent else scheme.text,
+                                        maxLines = 1,
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                            }
+                        }
+
+                        if (selectedSubtitle != null) {
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Sync / Offset
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "Смещение",
+                                    fontFamily = MetroFonts.headline,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 11.sp,
+                                    color = scheme.text,
+                                )
+                                Text(
+                                    text = String.format(Locale.US, "%+.1f с", subtitleOffsetSec),
+                                    fontFamily = MetroFonts.text,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    color = if (subtitleOffsetSec != 0f) scheme.accent else scheme.textDim,
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                listOf(-5f, -1f, -0.5f, 0f, 0.5f, 1f, 5f).forEach { delta ->
+                                    val isReset = delta == 0f
+                                    val label = if (isReset) "0" else String.format(Locale.US, "%+.1f", delta).removeSuffix(".0")
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (isReset && subtitleOffsetSec == 0f) scheme.accent.copy(alpha = 0.25f) else scheme.glass)
+                                            .border(1.dp, scheme.stroke, RoundedCornerShape(6.dp))
+                                            .metroClickable {
+                                                if (isReset) subtitleOffsetSec = 0f
+                                                else subtitleOffsetSec = (subtitleOffsetSec + delta).coerceIn(-30f, 30f)
+                                            }
+                                            .padding(vertical = 5.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            fontFamily = MetroFonts.text,
+                                            fontSize = 9.sp,
+                                            color = scheme.text,
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Font size
+                            Text(
+                                text = "Размер шрифта",
+                                fontFamily = MetroFonts.headline,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp,
+                                color = scheme.text,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                listOf(Pair("Мелкий", 16.sp), Pair("Обычный", 20.sp), Pair("Крупный", 26.sp)).forEach { (name, size) ->
+                                    val isSizeSelected = subtitleFontSize == size
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (isSizeSelected) scheme.accent else scheme.glass)
+                                            .border(1.dp, if (isSizeSelected) scheme.accent else scheme.stroke, RoundedCornerShape(6.dp))
+                                            .metroClickable { subtitleFontSize = size }
+                                            .padding(vertical = 6.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            text = name,
+                                            fontFamily = MetroFonts.headline,
+                                            fontSize = 10.sp,
+                                            color = if (isSizeSelected) Color.White else scheme.text,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

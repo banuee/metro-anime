@@ -2,17 +2,23 @@ package dev.metro.anime.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dev.metro.anime.data.api.ApiClient
+import dev.metro.anime.data.api.HiAnimeClient
+import dev.metro.anime.data.api.JimakuClient
 import dev.metro.anime.data.download.DownloadManager
 import dev.metro.anime.data.model.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 class AnimeRepository(context: Context) {
     private val appContext: Context = context.applicationContext
@@ -28,6 +34,9 @@ class AnimeRepository(context: Context) {
 
     private val _subscriptions = MutableStateFlow<List<EpisodeSubscription>>(emptyList())
     val subscriptions: StateFlow<List<EpisodeSubscription>> = _subscriptions.asStateFlow()
+
+    private val hiAnimeSubtitlesCache = ConcurrentHashMap<String, List<SubtitleTrack>>()
+    private val hiAnimeSkipCache = ConcurrentHashMap<String, Pair<SkipTimestamps?, SkipTimestamps?>>()
 
     init {
         loadBookmarks()
@@ -158,75 +167,102 @@ class AnimeRepository(context: Context) {
         prefs.edit().putString("episode_subscriptions", gson.toJson(list)).apply()
     }
 
-    suspend fun searchAnime(query: String): List<AnimeTitle> {
-        if (query.isBlank()) return emptyList()
-        val directResults = ApiClient.searchAniLibria(query, limit = 25)
+    private val STOP_WORDS = setOf(
+        "в", "во", "на", "и", "с", "со", "под", "по", "из", "изо", "о", "об", "обо", "к", "ко", "у", "от", "до", "за",
+        "the", "a", "an", "of", "in", "on", "no", "to", "and", "is", "at"
+    )
 
-        val baseCleanQuery = query.replace(
+    private fun normalizeForSearch(text: String): String {
+        val lower = text.lowercase().replace('ё', 'е')
+        val clean = lower.replace(Regex("[^a-zа-я0-9\\s]"), " ")
+        return clean.replace(Regex("\\s+"), " ").trim()
+    }
+
+    suspend fun searchAnime(query: String): List<AnimeTitle> = coroutineScope {
+        val qTrim = query.trim()
+        if (qTrim.isBlank()) return@coroutineScope emptyList()
+
+        val baseCleanQuery = qTrim.replace(
             Regex("(?i)\\b(\\d+\\s*сезон|сезон\\s*\\d+|\\d+\\s*(?:st|nd|rd|th)?\\s*season|season\\s*\\d+|тв-?\\d+|тв\\s*\\d+)\\b"),
             ""
         ).trim()
-        val baseAniResults = if (baseCleanQuery.isNotBlank() && !baseCleanQuery.equals(query, ignoreCase = true)) {
-            ApiClient.searchAniLibria(baseCleanQuery, limit = 25)
-        } else emptyList()
 
-        val shikiQuery = ApiClient.resolveShikimoriRussianTitle(query)
-        val shikiAniResults = if (!shikiQuery.isNullOrBlank() &&
-            !shikiQuery.equals(query, ignoreCase = true) &&
-            !shikiQuery.equals(baseCleanQuery, ignoreCase = true)
-        ) {
-            ApiClient.searchAniLibria(shikiQuery, limit = 25)
-        } else emptyList()
-
-        val shikiResults = ApiClient.searchShikimori(query, limit = 25)
-
-        val kodikResults = mutableListOf<AnimeTitle>()
-        val primaryKodik = ApiClient.searchKodikTitles(query, limit = 100)
-        kodikResults.addAll(primaryKodik)
-        if (!shikiQuery.isNullOrBlank() && !shikiQuery.equals(query, ignoreCase = true)) {
-            val altKodik = ApiClient.searchKodikTitles(shikiQuery, limit = 100)
-            kodikResults.addAll(altKodik)
+        val directAniDeferred = async { ApiClient.searchAniLibria(qTrim, limit = 25) }
+        val baseAniDeferred = async {
+            if (baseCleanQuery.isNotBlank() && !baseCleanQuery.equals(qTrim, ignoreCase = true)) {
+                ApiClient.searchAniLibria(baseCleanQuery, limit = 25)
+            } else emptyList()
         }
-        if (baseCleanQuery.isNotBlank() && !baseCleanQuery.equals(query, ignoreCase = true) && !baseCleanQuery.equals(shikiQuery, ignoreCase = true)) {
-            val baseKodik = ApiClient.searchKodikTitles(baseCleanQuery, limit = 100)
-            kodikResults.addAll(baseKodik)
+
+        val primaryKodikDeferred = async { ApiClient.searchKodikTitles(qTrim, limit = 100) }
+        val altKodikDeferred = async {
+            val swapped = if (qTrim.contains("е")) qTrim.replace('е', 'ё') else qTrim.replace('ё', 'е')
+            if (swapped != qTrim) {
+                ApiClient.searchKodikTitles(swapped, limit = 60)
+            } else if (baseCleanQuery.isNotBlank() && !baseCleanQuery.equals(qTrim, ignoreCase = true)) {
+                ApiClient.searchKodikTitles(baseCleanQuery, limit = 60)
+            } else emptyList()
         }
+
+        val shikiResultsDeferred = async {
+            try {
+                ApiClient.searchShikimori(qTrim, limit = 20)
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+
+        val hiAnimeDeferred = async {
+            if (qTrim.any { it in 'a'..'z' || it in 'A'..'Z' }) {
+                try {
+                    HiAnimeClient.searchHiAnime(qTrim)
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            } else emptyList()
+        }
+
+        val directResults = directAniDeferred.await()
+        val baseAniResults = baseAniDeferred.await()
+        val primaryKodik = primaryKodikDeferred.await()
+        val altKodik = altKodikDeferred.await()
+        val shikiResults = shikiResultsDeferred.await()
+        val hiAnimeResults = hiAnimeDeferred.await()
 
         val combined = mutableListOf<AnimeTitle>()
         val seenTitles = mutableSetOf<String>()
         val seenShiki = mutableSetOf<Long>()
 
         fun tryAdd(item: AnimeTitle) {
-            val key = item.titleRu.lowercase().trim()
+            val key = normalizeForSearch(item.titleRu.ifBlank { item.titleOrig ?: "" })
             val shiki = item.shikimoriId
-            if (shiki != null && seenShiki.contains(shiki)) return
+            if (shiki != null && shiki > 0 && seenShiki.contains(shiki)) return
             if (seenTitles.contains(key)) return
             combined.add(item)
             seenTitles.add(key)
-            if (shiki != null) seenShiki.add(shiki)
+            if (shiki != null && shiki > 0) seenShiki.add(shiki)
         }
 
         directResults.forEach { tryAdd(it) }
         baseAniResults.forEach { tryAdd(it) }
-        shikiAniResults.forEach { tryAdd(it) }
-        kodikResults.forEach { tryAdd(it) }
+        primaryKodik.forEach { tryAdd(it) }
+        altKodik.forEach { tryAdd(it) }
         shikiResults.forEach { tryAdd(it) }
+        hiAnimeResults.forEach { tryAdd(it) }
 
-        val q = query.lowercase().trim()
-        val soughtSeason = extractSeasonNumber(q)
-        val isSeekingFinal = q.contains("финал") || q.contains("final")
+        val soughtSeason = extractSeasonNumber(qTrim)
+        val isSeekingFinal = qTrim.contains("финал", ignoreCase = true) || qTrim.contains("final", ignoreCase = true)
 
-        val sorted = combined.sortedWith { a, b ->
-            val scoreA = calculateRelevanceScore(a, q, soughtSeason, isSeekingFinal)
-            val scoreB = calculateRelevanceScore(b, q, soughtSeason, isSeekingFinal)
-            scoreB.compareTo(scoreA)
+        val scored = combined.mapNotNull { item ->
+            val score = calculateRelevanceScore(item, qTrim, soughtSeason, isSeekingFinal)
+            if (score > 0) Pair(item, score) else null
         }
 
-        return sorted
+        scored.sortedByDescending { it.second }.map { it.first }
     }
 
     private fun extractSeasonNumber(text: String): Int? {
-        val lower = text.lowercase()
+        val lower = text.lowercase().replace('ё', 'е')
         val mTv = Regex("\\[тв-(\\d+)").find(lower) ?: Regex("\\bтв-?(\\d+)\\b").find(lower)
         if (mTv != null) return mTv.groupValues[1].toIntOrNull()
 
@@ -235,6 +271,9 @@ class AnimeRepository(context: Context) {
 
         val mEng = Regex("(\\d+)(?:st|nd|rd|th)?\\s*season").find(lower) ?: Regex("season\\s*(\\d+)").find(lower)
         if (mEng != null) return mEng.groupValues[1].toIntOrNull()
+
+        val mTrail = Regex("\\s+(\\d+)\\s*$").find(lower)
+        if (mTrail != null) return mTrail.groupValues[1].toIntOrNull()
 
         if (lower.contains("первый сезон")) return 1
         if (lower.contains("второй сезон")) return 2
@@ -246,7 +285,7 @@ class AnimeRepository(context: Context) {
     }
 
     private fun extractPartNumber(text: String): Int {
-        val lower = text.lowercase()
+        val lower = text.lowercase().replace('ё', 'е')
         val mPart = Regex("часть\\s*(\\d+)").find(lower) ?: Regex("part\\s*(\\d+)").find(lower)
         if (mPart != null) return mPart.groupValues[1].toIntOrNull() ?: 1
         if (lower.contains("заключительная глава")) return 3
@@ -259,67 +298,93 @@ class AnimeRepository(context: Context) {
         soughtSeason: Int?,
         isSeekingFinal: Boolean,
     ): Int {
-        var score = 1000
-        val t = item.titleRu.lowercase().trim()
-        val typeStr = item.type?.lowercase().orEmpty()
+        val tNorm = normalizeForSearch(item.titleRu.ifBlank { item.titleOrig ?: "" })
+        val origNorm = item.titleOrig?.let { normalizeForSearch(it) } ?: ""
+        val qNorm = normalizeForSearch(q)
 
-        val isSpecial = t.contains("спэшл") || t.contains("спешл") || t.contains("special") ||
-                t.contains("ova") || t.contains("ова") || t.contains("тиби") || t.contains("чиби") ||
-                t.contains("коллаб") || typeStr.contains("спешл") || typeStr.contains("ova")
-        val isMovie = typeStr == "anime" || typeStr.contains("фильм") || typeStr.contains("movie") ||
-                t.contains("фильм") || t.contains("movie") || t.contains("хроника") || t.contains("крылья свободы") ||
-                Regex("\\b(?:2|3|4|5|6|7|8|9|10):\\s").containsMatchIn(t)
-        val isSpinoff = t.contains("средней школы") || t.contains("чудо-титаны") || t.contains("сникерс") || t.contains("драма")
+        val cleanQ = q.replace(Regex("(?i)\\b(\\d+\\s*сезон|сезон\\s*\\d+|\\d+\\s*(?:st|nd|rd|th)?\\s*season|season\\s*\\d+|тв-?\\d+|тв\\s*\\d+|финал)\\b"), "").trim()
+        val cleanQNorm = normalizeForSearch(cleanQ)
 
-        val season = extractSeasonNumber(t) ?: if (!isSpecial && !isMovie && !isSpinoff && !t.contains("финал")) 1 else if (t.contains("финал")) 4 else null
-        val part = extractPartNumber(t)
+        val activeQNorm = if (cleanQNorm.isNotBlank()) cleanQNorm else qNorm
+        val qWords = activeQNorm.split(" ").filter { it.isNotBlank() && it !in STOP_WORDS }
+        val tWords = tNorm.split(" ").filter { it.isNotBlank() && it !in STOP_WORDS }
+        val tWordsSet = tWords.toSet()
+        val origWordsSet = origNorm.split(" ").filter { it.isNotBlank() && it !in STOP_WORDS }.toSet()
 
-        // Query match quality
-        val cleanQ = q.replace(Regex("(?i)\\b(\\d+\\s*сезон|сезон\\s*\\d+|тв-?\\d+|финал)\\b"), "").trim()
-        if (t == q || t == "$q 1" || t == "$q [тв-1]") {
-            score += 1500
-        } else if (cleanQ.isNotBlank() && (t == cleanQ || t.startsWith("$cleanQ [тв-") || t.startsWith("$cleanQ:"))) {
-            score += 1200
-        } else if (t.startsWith(q) || (cleanQ.isNotBlank() && t.startsWith(cleanQ))) {
-            score += 800
-        } else if (t.contains(q) || (cleanQ.isNotBlank() && t.contains(cleanQ))) {
-            score += 500
+        val matchCount = qWords.count { w ->
+            tWordsSet.contains(w) || origWordsSet.contains(w) ||
+                    tWordsSet.any { tw -> tw.contains(w) } || origWordsSet.any { ow -> ow.contains(w) }
         }
 
-        // Penalties for specials / spinoffs / movies
+        // Hard filter: if query has significant words and title has 0 matches, completely discard
+        if (qWords.isNotEmpty() && matchCount == 0) {
+            return -999999
+        }
+
+        var score = 1000
+
+        // Ratio of matched words
+        if (qWords.isNotEmpty()) {
+            val ratio = matchCount.toDouble() / qWords.size.toDouble()
+            if (ratio >= 1.0) {
+                score += 5000
+                val extraWords = maxOf(0, tWords.size - qWords.size)
+                score -= minOf(1500, extraWords * 120)
+            } else {
+                score += (ratio * 1000).toInt() - 3000
+            }
+        }
+
+        // Exact / prefix title matches
+        if (tNorm == qNorm || (cleanQNorm.isNotBlank() && tNorm == cleanQNorm)) {
+            score += 3500
+        } else if (cleanQNorm.isNotBlank() && (tNorm.startsWith("$cleanQNorm тв") || tNorm.startsWith("$cleanQNorm 1") || tNorm.startsWith("$cleanQNorm "))) {
+            score += 2500
+        } else if (tNorm.startsWith(qNorm) || (cleanQNorm.isNotBlank() && tNorm.startsWith(cleanQNorm))) {
+            score += 1500
+        }
+
+        val typeStr = item.type?.lowercase().orEmpty()
+        val isSpecial = tNorm.contains("спэшл") || tNorm.contains("спешл") || tNorm.contains("special") ||
+                tNorm.contains("ova") || tNorm.contains("ова") || tNorm.contains("тиби") || tNorm.contains("чиби") ||
+                tNorm.contains("воспоминания") || typeStr.contains("спешл") || typeStr.contains("ova")
+        val isMovie = typeStr == "anime" || typeStr.contains("фильм") || typeStr.contains("movie") ||
+                tNorm.contains("фильм") || tNorm.contains("movie") || tNorm.contains("хроника") ||
+                tNorm.contains("героя") || tNorm.contains("героев") ||
+                Regex("\\b(?:2|3|4|5|6|7|8|9|10):\\s").containsMatchIn(item.titleRu.lowercase())
+        val isSpinoff = tNorm.contains("средней школы") || tNorm.contains("чудо титаны") ||
+                tNorm.contains("сникерс") || tNorm.contains("драма") || tNorm.contains("вне закона")
+
+        val season = extractSeasonNumber(item.titleRu)
+            ?: if (!isSpecial && !isMovie && !isSpinoff && !tNorm.contains("финал")) 1 else if (tNorm.contains("финал")) 4 else null
+        val part = extractPartNumber(item.titleRu)
+
         if (isSpecial) {
-            score -= 900
+            score -= 1200
         } else if (isSpinoff) {
-            score -= 600
+            score -= 900
         } else if (isMovie) {
-            score -= 400
+            score -= 700
         } else {
-            // Main TV series
             score += 300
             if (soughtSeason != null) {
                 if (season == soughtSeason) {
-                    score += 2000
+                    score += 3000
+                } else {
+                    score -= 1000
                 }
             } else if (isSeekingFinal) {
-                if (t.contains("финал") || season == 4) {
-                    score += 2000
+                if (tNorm.contains("финал") || season == 4) {
+                    score += 3000
                 }
             } else {
-                // Canonical chronological order for main TV series:
-                // Season 1 > Season 2 > Season 3 > Season 4...
                 if (season != null) {
-                    score += 500 + (10 - season.coerceIn(1, 9)) * 100 + (5 - part.coerceIn(1, 4)) * 10
+                    score += 800 + (10 - season.coerceIn(1, 9)) * 120 + (5 - part.coerceIn(1, 4)) * 10
                 }
             }
         }
 
-        // Release year priority (earlier years preferred for chronological ordering)
-        if (item.year != null && item.year > 0) {
-            score += (2030 - item.year).coerceIn(0, 50)
-        }
-
-        // Tie-breaker rating bonus
-        val ratingBonus = ((item.rating ?: 0.0) * 10).toInt().coerceIn(0, 100)
+        val ratingBonus = ((item.rating ?: 0.0) * 5).toInt().coerceIn(0, 50)
         score += ratingBonus
 
         return score
@@ -435,6 +500,51 @@ class AnimeRepository(context: Context) {
             allDubs.add(kd.copy(title = label, episodes = eps))
         }
 
+        // Format HiAnime dubs (English Dub and Sub)
+        try {
+            val enSearchQuery = details.title.titleOrig?.takeIf { it.isNotBlank() }
+                ?: (if (details.title.titleRu.any { it in 'a'..'z' || it in 'A'..'Z' }) details.title.titleRu else titleQuery)
+            if (!enSearchQuery.isNullOrBlank()) {
+                val hiMatches = HiAnimeClient.searchHiAnime(enSearchQuery)
+                val bestMatch = hiMatches.firstOrNull()
+                if (bestMatch != null) {
+                    val hiEpisodes = HiAnimeClient.getEpisodes(bestMatch.id)
+                    if (hiEpisodes.isNotEmpty()) {
+                        val dubEps = hiEpisodes.map { ep ->
+                            ep.copy(
+                                hlsStreams = ep.hlsStreams + mapOf("is_dub" to "true"),
+                                isFiller = fillers.contains(ep.ordinal),
+                            )
+                        }
+                        val subEps = hiEpisodes.map { ep ->
+                            ep.copy(
+                                hlsStreams = ep.hlsStreams + mapOf("is_dub" to "false"),
+                                isFiller = fillers.contains(ep.ordinal),
+                            )
+                        }
+                        allDubs.add(
+                            DubbingGroup(
+                                id = "hianime_dub_${bestMatch.id}",
+                                title = "English Dub (HiAnime)",
+                                source = AnimeSource.HIANIME,
+                                episodes = dubEps,
+                            )
+                        )
+                        allDubs.add(
+                            DubbingGroup(
+                                id = "hianime_sub_${bestMatch.id}",
+                                title = "English Sub (HiAnime)",
+                                source = AnimeSource.HIANIME,
+                                episodes = subEps,
+                            )
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("AnimeRepository", "Error loading HiAnime dubs", e)
+        }
+
         // Smart sort dubs:
         // Priority 1: Dubs that start at episode 1 with the highest number of episodes!
         // Priority 2: Other dubs by episode count descending
@@ -535,8 +645,46 @@ class AnimeRepository(context: Context) {
         if (source == AnimeSource.ANILIBRIA) {
             return episode.hlsStreams
         }
+        if (source == AnimeSource.HIANIME) {
+            val epId = episode.hlsStreams["hianime_ep_id"] ?: return episode.hlsStreams
+            val isDub = episode.hlsStreams["is_dub"] == "true"
+            val resolved = HiAnimeClient.resolveStream(epId, isDub) ?: return emptyMap()
+            hiAnimeSubtitlesCache[epId] = resolved.subtitles
+            if (resolved.opening != null || resolved.ending != null) {
+                hiAnimeSkipCache[epId] = Pair(resolved.opening, resolved.ending)
+            }
+            return mapOf(
+                "1080" to resolved.streamUrl,
+                "auto" to resolved.streamUrl,
+            )
+        }
         val embedUrl = episode.hlsStreams["embed"] ?: return episode.hlsStreams
         return ApiClient.resolveKodikStream(embedUrl)
+    }
+
+    fun getResolvedSubtitles(episode: AnimeEpisode): List<SubtitleTrack> {
+        val epId = episode.hlsStreams["hianime_ep_id"]
+        val fromCache = if (epId != null) hiAnimeSubtitlesCache[epId] else null
+        return fromCache ?: episode.subtitles
+    }
+
+    fun getHiAnimeSkip(episode: AnimeEpisode): Pair<SkipTimestamps?, SkipTimestamps?>? {
+        val epId = episode.hlsStreams["hianime_ep_id"] ?: return null
+        return hiAnimeSkipCache[epId]
+    }
+
+    suspend fun fetchAllAvailableSubtitles(anime: AnimeTitle, episode: AnimeEpisode): List<SubtitleTrack> {
+        val list = mutableListOf<SubtitleTrack>()
+        list.addAll(getResolvedSubtitles(episode))
+        try {
+            val jimaku = JimakuClient.fetchEpisodeSubtitles(
+                anilistId = anime.shikimoriId,
+                title = anime.titleOrig ?: anime.titleRu,
+                episodeOrdinal = episode.ordinal,
+            )
+            list.addAll(jimaku)
+        } catch (_: Exception) {}
+        return list.distinctBy { it.url }
     }
 
     // =========================================================================

@@ -5,7 +5,16 @@ const val OFFLINE_STREAM_KEY = "Офлайн"
 enum class AnimeSource(val label: String) {
     ANILIBRIA("AniLibria"),
     KODIK("Kodik"),
+    HIANIME("HiAnime"),
 }
+
+data class SubtitleTrack(
+    val id: String,
+    val label: String,
+    val url: String,
+    val language: String = "en",
+    val isDefault: Boolean = false,
+)
 
 data class AnimeTitle(
     val id: String = "",
@@ -54,6 +63,7 @@ data class AnimeEpisode(
     val opening: SkipTimestamps? = null,
     val ending: SkipTimestamps? = null,
     val isFiller: Boolean = false,
+    val subtitles: List<SubtitleTrack> = emptyList(),
 )
 
 data class DubbingGroup(

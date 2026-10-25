@@ -27,6 +27,18 @@ object ApiClient {
 
     private val gson = Gson()
 
+    suspend fun fetchSubtitleText(url: String): String = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder()
+                .url(url)
+                .header("User-Agent", "MetroAnime/1.0")
+                .build()
+            client.newCall(req).execute().use { it.body?.string().orEmpty() }
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
     // =========================================================================
     // AniLibria API v1
     // =========================================================================
