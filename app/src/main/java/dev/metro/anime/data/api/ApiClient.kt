@@ -29,11 +29,16 @@ object ApiClient {
 
     suspend fun fetchSubtitleText(url: String): String = withContext(Dispatchers.IO) {
         try {
-            val req = Request.Builder()
+            val reqBuilder = Request.Builder()
                 .url(url)
-                .header("User-Agent", "MetroAnime/1.0")
-                .build()
-            client.newCall(req).execute().use { it.body?.string().orEmpty() }
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+            if (url.contains("ivorysummit") || url.contains("shiora.top") || url.contains("megaplay") || url.contains("megacloud") || url.contains("hianime")) {
+                reqBuilder.header("Referer", "https://megaplay.buzz/")
+                reqBuilder.header("Origin", "https://megaplay.buzz")
+            }
+            client.newCall(reqBuilder.build()).execute().use { response ->
+                if (!response.isSuccessful) "" else response.body?.string().orEmpty()
+            }
         } catch (_: Exception) {
             ""
         }

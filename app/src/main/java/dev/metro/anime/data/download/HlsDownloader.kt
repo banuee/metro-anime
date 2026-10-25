@@ -175,12 +175,20 @@ object HlsDownloader {
         return Playlist(emptyList())
     }
 
+    private fun createHlsRequest(url: String): Request {
+        val b = Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        if (url.contains("shiora.top") || url.contains("megaplay") || url.contains("megacloud") || url.contains("ivorysummit") || url.contains("hianime")) {
+            b.header("Referer", "https://megaplay.buzz/")
+            b.header("Origin", "https://megaplay.buzz")
+        }
+        return b.build()
+    }
+
     /** Скачивает бинарные данные (ключ AES-128). */
     private fun fetchBytes(url: String): ByteArray {
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", "MetroAnime/1.0")
-            .build()
+        val request = createHlsRequest(url)
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IllegalStateException("Ключ шифрования: HTTP ${response.code}")
             return response.body?.bytes() ?: throw IllegalStateException("Пустой ключ шифрования")
@@ -193,10 +201,7 @@ object HlsDownloader {
     }
 
     private fun fetchText(url: String): String {
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", "MetroAnime/1.0")
-            .build()
+        val request = createHlsRequest(url)
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw IllegalStateException("HTTP ${response.code}")
             return response.body?.string() ?: throw IllegalStateException("Пустой ответ")
@@ -215,10 +220,7 @@ object HlsDownloader {
         FileOutputStream(out).use { fos ->
             urls.forEachIndexed { index, segmentUrl ->
                 checkActive()
-                val request = Request.Builder()
-                    .url(segmentUrl)
-                    .header("User-Agent", "MetroAnime/1.0")
-                    .build()
+                val request = createHlsRequest(segmentUrl)
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) throw IllegalStateException("Сегмент ${index + 1}: HTTP ${response.code}")
                     val body = response.body ?: throw IllegalStateException("Пустой сегмент ${index + 1}")

@@ -62,6 +62,11 @@ import androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM
 import androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS
 import androidx.media3.common.Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -401,7 +406,39 @@ fun PlayerScreen(
             .setUsage(C.USAGE_MEDIA)
             .build()
 
+        val baseHttpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(15000)
+            .setReadTimeoutMs(20000)
+
+        val resolvingDataSourceFactory = ResolvingDataSource.Factory(
+            baseHttpDataSourceFactory,
+            object : ResolvingDataSource.Resolver {
+                override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
+                    val uriStr = dataSpec.uri.toString()
+                    if (uriStr.contains("shiora.top") ||
+                        uriStr.contains("megaplay") ||
+                        uriStr.contains("megacloud") ||
+                        uriStr.contains("ivorysummit") ||
+                        uriStr.contains("hianime")
+                    ) {
+                        val headers = HashMap(dataSpec.httpRequestHeaders)
+                        headers["Referer"] = "https://megaplay.buzz/"
+                        headers["Origin"] = "https://megaplay.buzz"
+                        return dataSpec.buildUpon().setHttpRequestHeaders(headers).build()
+                    }
+                    return dataSpec
+                }
+            }
+        )
+
+        val defaultDataSourceFactory = DefaultDataSource.Factory(context, resolvingDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(defaultDataSourceFactory)
+
         ExoPlayer.Builder(context, renderersFactory)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)

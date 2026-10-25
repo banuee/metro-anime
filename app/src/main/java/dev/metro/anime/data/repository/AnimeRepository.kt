@@ -292,6 +292,32 @@ class AnimeRepository(context: Context) {
         return 1
     }
 
+    private fun matchBestHiAnimeTitle(titles: List<AnimeTitle>, targetSeason: Int): AnimeTitle? {
+        if (titles.isEmpty()) return null
+        if (targetSeason <= 1) {
+            val s1 = titles.find {
+                val s = extractSeasonNumber(it.titleRu) ?: 1
+                s == 1 &&
+                        !it.id.contains("season-2") &&
+                        !it.id.contains("season-3") &&
+                        !it.id.contains("season-4") &&
+                        !it.id.contains("season-5") &&
+                        !it.id.contains("season-6") &&
+                        !it.id.contains("season-7")
+            }
+            if (s1 != null) return s1
+        } else {
+            val sMatch = titles.find {
+                val s = extractSeasonNumber(it.titleRu)
+                s == targetSeason ||
+                        it.id.contains("season-$targetSeason") ||
+                        it.titleRu.contains("$targetSeason", ignoreCase = true)
+            }
+            if (sMatch != null) return sMatch
+        }
+        return titles.firstOrNull()
+    }
+
     private fun calculateRelevanceScore(
         item: AnimeTitle,
         q: String,
@@ -502,11 +528,16 @@ class AnimeRepository(context: Context) {
 
         // Format HiAnime dubs (English Dub and Sub)
         try {
-            val enSearchQuery = details.title.titleOrig?.takeIf { it.isNotBlank() }
+            val rawEnQuery = details.title.titleOrig?.takeIf { it.isNotBlank() }
                 ?: (if (details.title.titleRu.any { it in 'a'..'z' || it in 'A'..'Z' }) details.title.titleRu else titleQuery)
-            if (!enSearchQuery.isNullOrBlank()) {
-                val hiMatches = HiAnimeClient.searchHiAnime(enSearchQuery)
-                val bestMatch = hiMatches.firstOrNull()
+            if (!rawEnQuery.isNullOrBlank()) {
+                val cleanEnQuery = rawEnQuery.replace(Regex("\\[[^\\]]*\\]|\\([^\\)]*\\)"), "").trim()
+                var hiMatches = HiAnimeClient.searchHiAnime(cleanEnQuery)
+                if (hiMatches.isEmpty() && cleanEnQuery != rawEnQuery) {
+                    hiMatches = HiAnimeClient.searchHiAnime(rawEnQuery)
+                }
+                val targetSeason = extractSeasonNumber(details.title.titleRu.ifBlank { titleQuery ?: "" }) ?: 1
+                val bestMatch = matchBestHiAnimeTitle(hiMatches, targetSeason) ?: hiMatches.firstOrNull()
                 if (bestMatch != null) {
                     val hiEpisodes = HiAnimeClient.getEpisodes(bestMatch.id)
                     if (hiEpisodes.isNotEmpty()) {
@@ -522,10 +553,24 @@ class AnimeRepository(context: Context) {
                                 isFiller = fillers.contains(ep.ordinal),
                             )
                         }
+                        val dubFirst = dubEps.firstOrNull()?.ordinal ?: 1
+                        val dubLast = dubEps.lastOrNull()?.ordinal ?: dubEps.size
+                        val dubLabel = if (dubFirst > 1) {
+                            "English Dub (HiAnime) (${dubFirst}–${dubLast} эп.)"
+                        } else {
+                            "English Dub (HiAnime) (${dubEps.size} эп.)"
+                        }
+                        val subFirst = subEps.firstOrNull()?.ordinal ?: 1
+                        val subLast = subEps.lastOrNull()?.ordinal ?: subEps.size
+                        val subLabel = if (subFirst > 1) {
+                            "English Sub (HiAnime) (${subFirst}–${subLast} эп.)"
+                        } else {
+                            "English Sub (HiAnime) (${subEps.size} эп.)"
+                        }
                         allDubs.add(
                             DubbingGroup(
                                 id = "hianime_dub_${bestMatch.id}",
-                                title = "English Dub (HiAnime)",
+                                title = dubLabel,
                                 source = AnimeSource.HIANIME,
                                 episodes = dubEps,
                             )
@@ -533,7 +578,7 @@ class AnimeRepository(context: Context) {
                         allDubs.add(
                             DubbingGroup(
                                 id = "hianime_sub_${bestMatch.id}",
-                                title = "English Sub (HiAnime)",
+                                title = subLabel,
                                 source = AnimeSource.HIANIME,
                                 episodes = subEps,
                             )
@@ -546,12 +591,19 @@ class AnimeRepository(context: Context) {
         }
 
         // Smart sort dubs:
-        // Priority 1: Dubs that start at episode 1 with the highest number of episodes!
-        // Priority 2: Other dubs by episode count descending
+        // Priority 1: AniLibria as main Russian dub
+        // Priority 2: English Dub and English Sub right next to it so it is immediately accessible
+        // Priority 3: Other full Russian dubs starting at ep 1 by episode count descending
+        // Priority 4: Partial dubs
         val sortedDubs = allDubs.sortedWith(
             compareByDescending<DubbingGroup> { dub ->
-                val first = dub.episodes.firstOrNull()?.ordinal ?: 1
-                if (first == 1) 1 else 0
+                when {
+                    dub.source == AnimeSource.ANILIBRIA -> 1000
+                    dub.id.startsWith("hianime_dub") -> 900
+                    dub.id.startsWith("hianime_sub") -> 850
+                    dub.episodes.firstOrNull()?.ordinal == 1 -> 500
+                    else -> 0
+                }
             }.thenByDescending { dub ->
                 dub.episodes.size
             }
