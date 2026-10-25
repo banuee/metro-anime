@@ -417,15 +417,21 @@ fun PlayerScreen(
             object : ResolvingDataSource.Resolver {
                 override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
                     val uriStr = dataSpec.uri.toString()
-                    if (uriStr.contains("shiora.top") ||
-                        uriStr.contains("megaplay") ||
-                        uriStr.contains("megacloud") ||
-                        uriStr.contains("ivorysummit") ||
-                        uriStr.contains("hianime")
-                    ) {
+                    val isZoko = uriStr.contains("dramahot.top") || uriStr.contains("zokoanime")
+                    val isMegaplay = uriStr.contains("shiora.top") ||
+                            uriStr.contains("megaplay") ||
+                            uriStr.contains("megacloud") ||
+                            uriStr.contains("ivorysummit") ||
+                            uriStr.contains("hianime")
+                    if (isZoko || isMegaplay) {
                         val headers = HashMap(dataSpec.httpRequestHeaders)
-                        headers["Referer"] = "https://megaplay.buzz/"
-                        headers["Origin"] = "https://megaplay.buzz"
+                        if (isZoko) {
+                            headers["Referer"] = "https://zokoanime.video/"
+                            headers["Origin"] = "https://zokoanime.video"
+                        } else {
+                            headers["Referer"] = "https://megaplay.buzz/"
+                            headers["Origin"] = "https://megaplay.buzz"
+                        }
                         return dataSpec.buildUpon().setHttpRequestHeaders(headers).build()
                     }
                     return dataSpec
@@ -924,7 +930,10 @@ fun PlayerScreen(
                 availableSubtitles = subs
                 if (selectedSubtitle == null) {
                     if (source == AnimeSource.HIANIME || currentDubbingTitle.contains("English", ignoreCase = true) || currentDubbingTitle.contains("англ", ignoreCase = true)) {
-                        selectedSubtitle = subs.firstOrNull { it.isDefault } ?: subs.firstOrNull()
+                        selectedSubtitle = subs.firstOrNull { (it.language == "en" || it.label.contains("English", ignoreCase = true)) && it.isDefault }
+                            ?: subs.firstOrNull { it.language == "en" || it.label.contains("English", ignoreCase = true) }
+                            ?: subs.firstOrNull { it.isDefault }
+                            ?: subs.firstOrNull()
                     }
                 }
             }

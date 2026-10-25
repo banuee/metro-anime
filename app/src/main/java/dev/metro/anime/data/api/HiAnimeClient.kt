@@ -204,7 +204,11 @@ object HiAnimeClient {
             return@withContext null
         }
 
-        resolveMegaplayStream(embedUrl)
+        if (embedUrl.contains("zokoanime")) {
+            resolveZokoanimeStream(embedUrl) ?: resolveMegaplayStream(embedUrl)
+        } else {
+            resolveMegaplayStream(embedUrl)
+        }
     }
 
     private fun extractEmbedUrl(html: String, isDub: Boolean): String? {
@@ -218,8 +222,9 @@ object HiAnimeClient {
         val namePattern = Pattern.compile("data-server-name=[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE)
 
         val matcher = serverItemPattern.matcher(html)
+        var zokoHash: String? = null
+        var megaHash: String? = null
         var fallbackHash: String? = null
-        var bestHash: String? = null
 
         while (matcher.find()) {
             val tag = matcher.group(0) ?: continue
@@ -233,19 +238,78 @@ object HiAnimeClient {
 
             if (sType == targetCategory && !sHash.isNullOrBlank()) {
                 if (fallbackHash == null) fallbackHash = sHash
-                if (sName.contains("hd-1") || sName.contains("megacloud") || sName.contains("megaplay")) {
-                    bestHash = sHash
-                    break
+                if (sName.contains("zoko")) {
+                    zokoHash = sHash
+                } else if (sName.contains("hd-1") || sName.contains("megacloud") || sName.contains("megaplay")) {
+                    megaHash = sHash
                 }
             }
         }
 
-        val chosenHash = bestHash ?: fallbackHash ?: return null
+        // ZokoAnime uses MAL ID mapping (100% accurate to the real title and episode)
+        val chosenHash = zokoHash ?: megaHash ?: fallbackHash ?: return null
         return try {
             val decoded = String(Base64.decode(chosenHash, Base64.DEFAULT), StandardCharsets.UTF_8).trim()
             if (decoded.startsWith("http")) decoded else null
         } catch (e: Exception) {
             Log.w(TAG, "Error decoding server hash", e)
+            null
+        }
+    }
+
+    private fun resolveZokoanimeStream(embedUrl: String): HiAnimeResolvedStream? {
+        return try {
+            val req = Request.Builder()
+                .url(embedUrl)
+                .header("User-Agent", USER_AGENT)
+                .header("Referer", "$BASE_URL/")
+                .build()
+
+            client.newCall(req).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val html = response.body?.string().orEmpty()
+                val pPattern = Pattern.compile("window\\.__P\\s*=\\s*\"([^\"]+)\"")
+                val pMatcher = pPattern.matcher(html)
+                if (!pMatcher.find()) return null
+                val blob = pMatcher.group(1) ?: return null
+
+                val raw = Base64.decode(blob, Base64.DEFAULT)
+                val key = "otaku-embed-v1".toByteArray(StandardCharsets.UTF_8)
+                val xored = ByteArray(raw.size) { i -> (raw[i].toInt() xor key[i % key.size].toInt()).toByte() }
+                val jsonStr = String(xored, StandardCharsets.UTF_8)
+                val root = gson.fromJson(jsonStr, JsonObject::class.java) ?: return null
+
+                val streamUrl = root.get("src")?.takeIf { !it.isJsonNull }?.asString
+                if (streamUrl.isNullOrBlank()) return null
+
+                val subtitles = mutableListOf<SubtitleTrack>()
+                val subsArray = root.getAsJsonArray("subtitles")
+                if (subsArray != null) {
+                    for (s in subsArray) {
+                        val sObj = s.asJsonObject
+                        val src = sObj.get("src")?.takeIf { !it.isJsonNull }?.asString ?: continue
+                        val label = sObj.get("label")?.takeIf { !it.isJsonNull }?.asString ?: "English"
+                        val lang = sObj.get("lang")?.takeIf { !it.isJsonNull }?.asString ?: "en"
+                        val isDef = sObj.get("default")?.takeIf { !it.isJsonNull }?.asBoolean ?: false
+                        subtitles.add(
+                            SubtitleTrack(
+                                id = "zoko_${subtitles.size}_$label",
+                                label = label,
+                                url = src,
+                                language = lang,
+                                isDefault = isDef || label.contains("english", ignoreCase = true),
+                            )
+                        )
+                    }
+                }
+
+                HiAnimeResolvedStream(
+                    streamUrl = streamUrl,
+                    subtitles = subtitles,
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error resolving zokoanime stream for $embedUrl", e)
             null
         }
     }

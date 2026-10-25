@@ -67,9 +67,9 @@ object JimakuClient {
                         result.add(
                             SubtitleTrack(
                                 id = "jimaku_$name",
-                                label = "English (Jimaku)",
+                                label = "Japanese (Jimaku)",
                                 url = url,
-                                language = "en",
+                                language = "ja",
                                 isDefault = false,
                             )
                         )
