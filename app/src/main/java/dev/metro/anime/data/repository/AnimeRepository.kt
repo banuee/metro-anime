@@ -448,6 +448,16 @@ class AnimeRepository(context: Context) {
                 ?: if (effectiveShikiId != null && effectiveShikiId > 0) "https://shikimori.one/system/animes/original/$effectiveShikiId.jpg" else ""
             val resolvedDesc = shikiTitle?.description?.ifBlank { null }
 
+            // Check if AniLibria has this anime to enrich dubbings & opening/ending timestamps
+            val aniMatches = try {
+                ApiClient.searchAniLibria(resolvedTitleRu, limit = 3)
+            } catch (_: Exception) { emptyList() }
+            val bestAni = aniMatches.firstOrNull { it.shikimoriId != null && it.shikimoriId == effectiveShikiId }
+                ?: aniMatches.firstOrNull()
+            val aniDubs = if (bestAni != null) {
+                try { ApiClient.getAniLibriaDetails(bestAni.id)?.dubbings ?: emptyList() } catch (_: Exception) { emptyList() }
+            } else emptyList()
+
             details = AnimeDetails(
                 title = AnimeTitle(
                     id = idOrAlias,
@@ -463,7 +473,7 @@ class AnimeRepository(context: Context) {
                     shikimoriId = effectiveShikiId,
                     source = AnimeSource.KODIK,
                 ),
-                dubbings = emptyList(),
+                dubbings = aniDubs,
                 rawDescription = resolvedDesc,
             )
         } else {
@@ -492,6 +502,8 @@ class AnimeRepository(context: Context) {
 
         val allDubs = mutableListOf<DubbingGroup>()
         // Format AniLibria dub
+        val anilibriaRefEps = details.dubbings.flatMap { it.episodes }
+
         for (ad in details.dubbings) {
             val eps = ad.episodes.sortedBy { it.ordinal }.map { ep ->
                 if (fillers.contains(ep.ordinal)) ep.copy(isFiller = true) else ep
@@ -513,7 +525,13 @@ class AnimeRepository(context: Context) {
                 continue
             }
             val eps = kd.episodes.sortedBy { it.ordinal }.map { ep ->
-                if (fillers.contains(ep.ordinal)) ep.copy(isFiller = true) else ep
+                val ref = anilibriaRefEps.find { it.ordinal == ep.ordinal }
+                ep.copy(
+                    isFiller = fillers.contains(ep.ordinal) || (ref?.isFiller == true),
+                    opening = ep.opening ?: ref?.opening,
+                    ending = ep.ending ?: ref?.ending,
+                    durationSec = ep.durationSec ?: ref?.durationSec,
+                )
             }
             val first = eps.firstOrNull()?.ordinal ?: 1
             val last = eps.lastOrNull()?.ordinal ?: eps.size
@@ -542,15 +560,23 @@ class AnimeRepository(context: Context) {
                     val hiEpisodes = HiAnimeClient.getEpisodes(bestMatch.id)
                     if (hiEpisodes.isNotEmpty()) {
                         val dubEps = hiEpisodes.map { ep ->
+                            val ref = anilibriaRefEps.find { it.ordinal == ep.ordinal }
                             ep.copy(
                                 hlsStreams = ep.hlsStreams + mapOf("is_dub" to "true"),
-                                isFiller = fillers.contains(ep.ordinal),
+                                isFiller = fillers.contains(ep.ordinal) || (ref?.isFiller == true),
+                                opening = ep.opening ?: ref?.opening,
+                                ending = ep.ending ?: ref?.ending,
+                                durationSec = ep.durationSec ?: ref?.durationSec,
                             )
                         }
                         val subEps = hiEpisodes.map { ep ->
+                            val ref = anilibriaRefEps.find { it.ordinal == ep.ordinal }
                             ep.copy(
                                 hlsStreams = ep.hlsStreams + mapOf("is_dub" to "false"),
-                                isFiller = fillers.contains(ep.ordinal),
+                                isFiller = fillers.contains(ep.ordinal) || (ref?.isFiller == true),
+                                opening = ep.opening ?: ref?.opening,
+                                ending = ep.ending ?: ref?.ending,
+                                durationSec = ep.durationSec ?: ref?.durationSec,
                             )
                         }
                         val dubFirst = dubEps.firstOrNull()?.ordinal ?: 1

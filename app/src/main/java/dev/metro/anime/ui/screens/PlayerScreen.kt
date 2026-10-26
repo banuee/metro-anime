@@ -254,9 +254,18 @@ fun PlayerScreen(
     var showSubtitlesDialog by remember { mutableStateOf(false) }
     var availableSubtitles by remember { mutableStateOf<List<SubtitleTrack>>(emptyList()) }
     var selectedSubtitle by remember { mutableStateOf<SubtitleTrack?>(null) }
+    var preferredSubtitleLang by remember { mutableStateOf<String?>("en") }
+    var subtitlesExplicitlyDisabled by remember { mutableStateOf(false) }
     var subtitleOffsetSec by remember { mutableFloatStateOf(0f) }
     var subtitleFontSize by remember { mutableStateOf(20.sp) }
     var parsedCues by remember { mutableStateOf<List<SubtitleCue>>(emptyList()) }
+
+    LaunchedEffect(episode) {
+        parsedCues = emptyList()
+        selectedSubtitle = null
+        availableSubtitles = emptyList()
+        subtitleOffsetSec = 0f
+    }
 
     var seekCumulativeSeconds by remember { mutableStateOf(0) }
     var seekIndicatorSide by remember { mutableStateOf(0) } // -1 left, +1 right
@@ -301,12 +310,18 @@ fun PlayerScreen(
     var activeOpening by remember(episode) { mutableStateOf(episode.opening) }
     var activeEnding by remember(episode) { mutableStateOf(episode.ending) }
 
-    LaunchedEffect(episode, anime.shikimoriId) {
-        if ((activeOpening == null || activeEnding == null) && anime.shikimoriId != null && anime.shikimoriId > 0) {
+    LaunchedEffect(episode, anime, durationMs) {
+        var shikiId = anime.shikimoriId
+        if ((shikiId == null || shikiId <= 0) && anime.titleRu.isNotBlank()) {
+            val search = dev.metro.anime.data.api.ApiClient.searchShikimori(anime.titleRu, limit = 1)
+            shikiId = search.firstOrNull()?.shikimoriId
+        }
+        val effectiveDur = episode.durationSec?.takeIf { it > 0 } ?: (durationMs / 1000).toInt()
+        if ((activeOpening == null || activeEnding == null) && shikiId != null && shikiId > 0 && effectiveDur > 60) {
             val skipPair = dev.metro.anime.data.api.ApiClient.fetchAniSkip(
-                malId = anime.shikimoriId,
+                malId = shikiId,
                 episodeOrdinal = episode.ordinal,
-                durationSec = episode.durationSec ?: (durationMs / 1000).toInt(),
+                durationSec = effectiveDur,
             )
             if (skipPair != null) {
                 if (activeOpening == null && skipPair.first != null) {
@@ -417,7 +432,7 @@ fun PlayerScreen(
             object : ResolvingDataSource.Resolver {
                 override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
                     val uriStr = dataSpec.uri.toString()
-                    val isZoko = uriStr.contains("dramahot.top") || uriStr.contains("zokoanime")
+                    val isZoko = uriStr.contains("drama") || uriStr.contains("zokoanime")
                     val isMegaplay = uriStr.contains("shiora.top") ||
                             uriStr.contains("megaplay") ||
                             uriStr.contains("megacloud") ||
@@ -426,7 +441,7 @@ fun PlayerScreen(
                     if (isZoko || isMegaplay) {
                         val headers = HashMap(dataSpec.httpRequestHeaders)
                         if (isZoko) {
-                            headers["Referer"] = "https://zokoanime.video/"
+                            headers["Referer"] = "https://zokoanime.video/stream/"
                             headers["Origin"] = "https://zokoanime.video"
                         } else {
                             headers["Referer"] = "https://megaplay.buzz/"
@@ -928,12 +943,22 @@ fun PlayerScreen(
             coroutineScope.launch {
                 val subs = repository.fetchAllAvailableSubtitles(currentAnime, episode)
                 availableSubtitles = subs
-                if (selectedSubtitle == null) {
-                    if (source == AnimeSource.HIANIME || currentDubbingTitle.contains("English", ignoreCase = true) || currentDubbingTitle.contains("англ", ignoreCase = true)) {
-                        selectedSubtitle = subs.firstOrNull { (it.language == "en" || it.label.contains("English", ignoreCase = true)) && it.isDefault }
-                            ?: subs.firstOrNull { it.language == "en" || it.label.contains("English", ignoreCase = true) }
-                            ?: subs.firstOrNull { it.isDefault }
-                            ?: subs.firstOrNull()
+                if (!subtitlesExplicitlyDisabled) {
+                    val isEnglishTrack = source == AnimeSource.HIANIME ||
+                            currentDubbingTitle.contains("English", ignoreCase = true) ||
+                            currentDubbingTitle.contains("англ", ignoreCase = true)
+                    val targetLang = preferredSubtitleLang ?: if (isEnglishTrack) "en" else null
+
+                    val autoSub = if (targetLang != null) {
+                        subs.firstOrNull { it.language.equals(targetLang, ignoreCase = true) && it.isDefault }
+                            ?: subs.firstOrNull { it.language.equals(targetLang, ignoreCase = true) }
+                            ?: subs.firstOrNull { it.label.contains("English", ignoreCase = true) }
+                    } else {
+                        subs.firstOrNull { it.isDefault } ?: subs.firstOrNull()
+                    }
+
+                    if (autoSub != null && (isEnglishTrack || preferredSubtitleLang != null)) {
+                        selectedSubtitle = autoSub
                     }
                 }
             }
@@ -2420,7 +2445,10 @@ fun PlayerScreen(
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(if (isOff) scheme.accent.copy(alpha = 0.2f) else scheme.glass)
                                 .border(1.dp, if (isOff) scheme.accent else scheme.stroke, RoundedCornerShape(6.dp))
-                                .metroClickable { selectedSubtitle = null }
+                                .metroClickable {
+                                    subtitlesExplicitlyDisabled = true
+                                    selectedSubtitle = null
+                                }
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                         ) {
                             Text(
@@ -2451,7 +2479,11 @@ fun PlayerScreen(
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(if (isSelected) scheme.accent.copy(alpha = 0.2f) else scheme.glass)
                                         .border(1.dp, if (isSelected) scheme.accent else scheme.stroke, RoundedCornerShape(6.dp))
-                                        .metroClickable { selectedSubtitle = sub }
+                                        .metroClickable {
+                                            subtitlesExplicitlyDisabled = false
+                                            preferredSubtitleLang = sub.language ?: if (sub.label.contains("English", ignoreCase = true)) "en" else null
+                                            selectedSubtitle = sub
+                                        }
                                         .padding(horizontal = 8.dp, vertical = 6.dp),
                                 ) {
                                     Text(

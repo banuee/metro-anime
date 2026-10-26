@@ -32,8 +32,8 @@ object ApiClient {
             val reqBuilder = Request.Builder()
                 .url(url)
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-            if (url.contains("dramahot.top") || url.contains("zokoanime")) {
-                reqBuilder.header("Referer", "https://zokoanime.video/")
+            if (url.contains("drama") || url.contains("zokoanime")) {
+                reqBuilder.header("Referer", "https://zokoanime.video/stream/")
                 reqBuilder.header("Origin", "https://zokoanime.video")
             } else if (url.contains("ivorysummit") || url.contains("shiora.top") || url.contains("megaplay") || url.contains("megacloud") || url.contains("hianime")) {
                 reqBuilder.header("Referer", "https://megaplay.buzz/")
