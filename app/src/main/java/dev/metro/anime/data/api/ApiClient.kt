@@ -40,7 +40,17 @@ object ApiClient {
                 reqBuilder.header("Origin", "https://megaplay.buzz")
             }
             client.newCall(reqBuilder.build()).execute().use { response ->
-                if (!response.isSuccessful) "" else response.body?.string().orEmpty()
+                if (!response.isSuccessful) return@use ""
+                val bytes = response.body?.bytes() ?: return@use ""
+                if (bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte()) {
+                    String(bytes, 2, bytes.size - 2, Charsets.UTF_16LE)
+                } else if (bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()) {
+                    String(bytes, 2, bytes.size - 2, Charsets.UTF_16BE)
+                } else if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) {
+                    String(bytes, 3, bytes.size - 3, Charsets.UTF_8)
+                } else {
+                    String(bytes, Charsets.UTF_8)
+                }
             }
         } catch (_: Exception) {
             ""

@@ -136,10 +136,9 @@ fun DetailsScreen(
         // Match active dubbing to previously watched if present
         val saved = repository.getProgress(anime.id)
         if (saved != null && loaded != null && loaded.dubbings.isNotEmpty()) {
-            fun cleanDubTitle(t: String): String = t.replace(Regex("\\s*\\(\\d+[^)]*\\)"), "").trim().lowercase()
             var idx = loaded.dubbings.indexOfFirst { it.title.equals(saved.dubbingTitle, ignoreCase = true) }
             if (idx < 0) {
-                idx = loaded.dubbings.indexOfFirst { cleanDubTitle(it.title) == cleanDubTitle(saved.dubbingTitle) }
+                idx = loaded.dubbings.indexOfFirst { dev.metro.anime.data.repository.normalizeDubName(it.title) == dev.metro.anime.data.repository.normalizeDubName(saved.dubbingTitle) }
             }
             if (idx < 0) {
                 idx = loaded.dubbings.indexOfFirst { it.source == saved.source && it.episodes.any { ep -> ep.ordinal == saved.episodeOrdinal } }

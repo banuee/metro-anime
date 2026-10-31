@@ -38,10 +38,97 @@ class AnimeRepository(context: Context) {
     private val hiAnimeSubtitlesCache = ConcurrentHashMap<String, List<SubtitleTrack>>()
     private val hiAnimeSkipCache = ConcurrentHashMap<String, Pair<SkipTimestamps?, SkipTimestamps?>>()
 
+    private val dubWatchedEpisodes = ConcurrentHashMap.newKeySet<String>()
+    private val dubWatchCounts = ConcurrentHashMap<String, Int>()
+
     init {
         loadBookmarks()
         loadHistory()
         loadSubscriptions()
+        loadDubWatchStats()
+    }
+
+    private fun loadDubWatchStats() {
+        val json = prefs.getString("dub_episodes_watched", null)
+        if (json != null) {
+            try {
+                val type = object : TypeToken<Set<String>>() {}.type
+                val set: Set<String> = gson.fromJson(json, type) ?: emptySet()
+                dubWatchedEpisodes.addAll(set)
+            } catch (_: Exception) {}
+        }
+        for (item in _history.value) {
+            if (item.dubbingTitle.isNotBlank() && item.episodeOrdinal > 0) {
+                val norm = normalizeDubName(item.dubbingTitle)
+                if (norm.isNotBlank()) {
+                    dubWatchedEpisodes.add("${item.anime.id}_${item.episodeOrdinal}_$norm")
+                }
+            }
+        }
+        recalcDubWatchCounts()
+    }
+
+    private fun recalcDubWatchCounts() {
+        val counts = mutableMapOf<String, Int>()
+        for (key in dubWatchedEpisodes) {
+            val dubName = key.substringAfterLast('_', "")
+            if (dubName.isNotBlank()) {
+                counts[dubName] = (counts[dubName] ?: 0) + 1
+            }
+        }
+        dubWatchCounts.clear()
+        dubWatchCounts.putAll(counts)
+    }
+
+    private fun recordEpisodeWatched(animeId: String, ordinal: Int, dubTitle: String) {
+        val dubName = normalizeDubName(dubTitle)
+        if (dubName.isBlank()) return
+        val key = "${animeId}_${ordinal}_$dubName"
+        if (dubWatchedEpisodes.add(key)) {
+            dubWatchCounts[dubName] = (dubWatchCounts[dubName] ?: 0) + 1
+            try {
+                prefs.edit().putString("dub_episodes_watched", gson.toJson(dubWatchedEpisodes)).apply()
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun getDubWatchCounts(): Map<String, Int> = dubWatchCounts.toMap()
+
+    fun sortDubbingGroups(dubs: List<DubbingGroup>, animeId: String?): List<DubbingGroup> {
+        val lastProgress = animeId?.let { getProgress(it) }
+        val lastDubRaw = lastProgress?.dubbingTitle.orEmpty()
+        val lastDubNorm = if (lastDubRaw.isNotBlank()) normalizeDubName(lastDubRaw) else ""
+
+        return dubs.sortedWith(
+            compareByDescending<DubbingGroup> { dub ->
+                if (dub.id == "offline") return@compareByDescending 100_000_000
+                val norm = normalizeDubName(dub.title)
+                val isLast = lastDubNorm.isNotBlank() && (
+                    norm == lastDubNorm ||
+                    dub.title.equals(lastDubRaw, ignoreCase = true) ||
+                    dub.id.equals(lastDubRaw, ignoreCase = true)
+                )
+                if (isLast) 10_000_000 else 0
+            }.thenByDescending { dub ->
+                val norm = normalizeDubName(dub.title)
+                val count = dubWatchCounts[norm] ?: 0
+                count * 1000
+            }.thenByDescending { dub ->
+                when {
+                    dub.episodes.firstOrNull()?.ordinal == 1 -> 500
+                    else -> 0
+                }
+            }.thenByDescending { dub ->
+                dub.episodes.size.coerceAtMost(100)
+            }.thenByDescending { dub ->
+                when {
+                    dub.source == AnimeSource.ANILIBRIA -> 50
+                    dub.id.startsWith("hianime_dub") -> 40
+                    dub.id.startsWith("hianime_sub") -> 30
+                    else -> 0
+                }
+            }
+        )
     }
 
     suspend fun getLatestAnime(): List<AnimeTitle> {
@@ -212,22 +299,11 @@ class AnimeRepository(context: Context) {
             }
         }
 
-        val hiAnimeDeferred = async {
-            if (qTrim.any { it in 'a'..'z' || it in 'A'..'Z' }) {
-                try {
-                    HiAnimeClient.searchHiAnime(qTrim)
-                } catch (_: Exception) {
-                    emptyList()
-                }
-            } else emptyList()
-        }
-
         val directResults = directAniDeferred.await()
         val baseAniResults = baseAniDeferred.await()
         val primaryKodik = primaryKodikDeferred.await()
         val altKodik = altKodikDeferred.await()
         val shikiResults = shikiResultsDeferred.await()
-        val hiAnimeResults = hiAnimeDeferred.await()
 
         val combined = mutableListOf<AnimeTitle>()
         val seenTitles = mutableSetOf<String>()
@@ -248,7 +324,6 @@ class AnimeRepository(context: Context) {
         primaryKodik.forEach { tryAdd(it) }
         altKodik.forEach { tryAdd(it) }
         shikiResults.forEach { tryAdd(it) }
-        hiAnimeResults.forEach { tryAdd(it) }
 
         val soughtSeason = extractSeasonNumber(qTrim)
         val isSeekingFinal = qTrim.contains("финал", ignoreCase = true) || qTrim.contains("final", ignoreCase = true)
@@ -617,23 +692,7 @@ class AnimeRepository(context: Context) {
         }
 
         // Smart sort dubs:
-        // Priority 1: AniLibria as main Russian dub
-        // Priority 2: English Dub and English Sub right next to it so it is immediately accessible
-        // Priority 3: Other full Russian dubs starting at ep 1 by episode count descending
-        // Priority 4: Partial dubs
-        val sortedDubs = allDubs.sortedWith(
-            compareByDescending<DubbingGroup> { dub ->
-                when {
-                    dub.source == AnimeSource.ANILIBRIA -> 1000
-                    dub.id.startsWith("hianime_dub") -> 900
-                    dub.id.startsWith("hianime_sub") -> 850
-                    dub.episodes.firstOrNull()?.ordinal == 1 -> 500
-                    else -> 0
-                }
-            }.thenByDescending { dub ->
-                dub.episodes.size
-            }
-        )
+        val sortedDubs = sortDubbingGroups(allDubs, details.title.id)
 
         val result = details.copy(dubbings = sortedDubs)
         if (result.dubbings.isNotEmpty()) {
@@ -650,24 +709,26 @@ class AnimeRepository(context: Context) {
     // =========================================================================
 
     private fun withOfflineDubs(details: AnimeDetails): AnimeDetails {
-        if (!DownloadManager.isInitialized()) return details
+        if (!DownloadManager.isInitialized()) return details.copy(dubbings = sortDubbingGroups(details.dubbings, details.title.id))
         val offline = DownloadManager.downloadedFor(details.title.id)
-        if (offline.isEmpty()) return details
-        val episodes = offline.map { rec ->
-            AnimeEpisode(
-                ordinal = rec.episodeOrdinal,
-                name = rec.episodeName ?: "Серия ${rec.episodeOrdinal}",
-                hlsStreams = mapOf(OFFLINE_STREAM_KEY to rec.fileUri),
-                durationSec = rec.durationSec,
+        val base = if (offline.isEmpty()) details else {
+            val episodes = offline.map { rec ->
+                AnimeEpisode(
+                    ordinal = rec.episodeOrdinal,
+                    name = rec.episodeName ?: "Серия ${rec.episodeOrdinal}",
+                    hlsStreams = mapOf(OFFLINE_STREAM_KEY to rec.fileUri),
+                    durationSec = rec.durationSec,
+                )
+            }.sortedBy { it.ordinal }
+            val offlineDub = DubbingGroup(
+                id = "offline",
+                title = "Офлайн (${episodes.size} эп.)",
+                source = AnimeSource.ANILIBRIA,
+                episodes = episodes,
             )
+            details.copy(dubbings = listOf(offlineDub) + details.dubbings)
         }
-        val dub = DubbingGroup(
-            id = "offline",
-            title = "Скачано (офлайн)",
-            source = AnimeSource.ANILIBRIA,
-            episodes = episodes,
-        )
-        return details.copy(dubbings = listOf(dub) + details.dubbings)
+        return base.copy(dubbings = sortDubbingGroups(base.dubbings, details.title.id))
     }
 
     private data class CachedDetails(val savedAt: Long, val details: AnimeDetails)
@@ -811,6 +872,9 @@ class AnimeRepository(context: Context) {
 
     fun saveProgress(progress: WatchProgress) {
         val cleanProgress = progress.sanitized().copy(updatedAt = System.currentTimeMillis())
+        if (cleanProgress.dubbingTitle.isNotBlank() && cleanProgress.episodeOrdinal > 0) {
+            recordEpisodeWatched(cleanProgress.anime.id, cleanProgress.episodeOrdinal, cleanProgress.dubbingTitle)
+        }
         synchronized(historyLock) {
             val current = _history.value.toMutableList()
             current.removeAll { it.anime.id == cleanProgress.anime.id }
@@ -849,5 +913,14 @@ class AnimeRepository(context: Context) {
                 .apply()
         }
     }
+}
+
+fun normalizeDubName(title: String): String {
+    var s = title.lowercase()
+    s = s.replace(Regex("\\(\\s*\\d+[–-]\\d+\\s*(?:эп|сер|серий|серии|ep|eps)\\.?\\s*\\)"), "")
+    s = s.replace(Regex("\\(\\s*\\d+\\s*(?:эп|сер|серий|серии|ep|eps)\\.?\\s*\\)"), "")
+    s = s.replace(Regex("\\((?:hianime|kodik|оригинал)\\)"), "")
+    s = s.replace(Regex("[^a-zа-я0-9\\s]"), " ")
+    return s.replace(Regex("\\s+"), " ").trim()
 }
 

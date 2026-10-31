@@ -52,28 +52,48 @@ object JimakuClient {
                     Pattern.compile("(?i)-\\s*0*$episodeOrdinal\\s*\\."),
                 )
 
+                val matchedFiles = mutableListOf<Triple<String, String, Int>>() // name, url, score
+
                 for (elem in array) {
                     val obj = elem.asJsonObject
                     val name = obj.get("name")?.asString ?: continue
                     val url = obj.get("url")?.asString ?: continue
-                    if (!name.endsWith(".srt", ignoreCase = true) &&
-                        !name.endsWith(".vtt", ignoreCase = true) &&
-                        !name.endsWith(".ass", ignoreCase = true)
-                    ) {
+                    val ext = name.substringAfterLast('.', "").lowercase()
+                    if (ext != "srt" && ext != "vtt" && ext != "ass") {
                         continue
                     }
                     val matches = epPatterns.any { it.matcher(name).find() }
                     if (matches) {
-                        result.add(
-                            SubtitleTrack(
-                                id = "jimaku_$name",
-                                label = "Japanese (Jimaku)",
-                                url = url,
-                                language = "ja",
-                                isDefault = false,
-                            )
-                        )
+                        var score = 0
+                        if (ext == "srt" || ext == "vtt") score += 50
+                        if (name.contains(".ja.", ignoreCase = true) || name.contains(".jp.", ignoreCase = true)) score += 20
+                        if (name.contains("BDRip", ignoreCase = true)) score += 10
+                        matchedFiles.add(Triple(name, url, score))
                     }
+                }
+
+                // Sort by score descending and take top 2 distinct release groups
+                val seenGroups = mutableSetOf<String>()
+                matchedFiles.sortByDescending { it.third }
+
+                for ((name, url, _) in matchedFiles) {
+                    val groupMatch = Pattern.compile("^\\[([^\\]]+)\\]").matcher(name)
+                    val groupName = if (groupMatch.find()) groupMatch.group(1)?.trim().orEmpty() else ""
+                    val groupKey = groupName.lowercase()
+                    if (groupKey.isNotEmpty() && seenGroups.contains(groupKey)) continue
+                    if (groupKey.isNotEmpty()) seenGroups.add(groupKey)
+
+                    val label = if (groupName.isNotEmpty()) "Japanese (Jimaku - $groupName)" else "Japanese (Jimaku)"
+                    result.add(
+                        SubtitleTrack(
+                            id = "jimaku_$name",
+                            label = label,
+                            url = url,
+                            language = "ja",
+                            isDefault = false,
+                        )
+                    )
+                    if (result.size >= 2) break
                 }
                 result
             }

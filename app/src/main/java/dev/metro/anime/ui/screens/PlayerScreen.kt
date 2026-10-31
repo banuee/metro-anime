@@ -256,15 +256,23 @@ fun PlayerScreen(
     var selectedSubtitle by remember { mutableStateOf<SubtitleTrack?>(null) }
     var preferredSubtitleLang by remember { mutableStateOf<String?>("en") }
     var subtitlesExplicitlyDisabled by remember { mutableStateOf(false) }
-    var subtitleOffsetSec by remember { mutableFloatStateOf(0f) }
+
+    val playerPrefs = remember { context.getSharedPreferences("metro_player_prefs", android.content.Context.MODE_PRIVATE) }
+    var subtitleOffsetSec by remember(anime.id) {
+        mutableFloatStateOf(playerPrefs.getFloat("sub_offset_${anime.id}", 0f))
+    }
     var subtitleFontSize by remember { mutableStateOf(20.sp) }
     var parsedCues by remember { mutableStateOf<List<SubtitleCue>>(emptyList()) }
+
+    LaunchedEffect(subtitleOffsetSec, anime.id) {
+        playerPrefs.edit().putFloat("sub_offset_${anime.id}", subtitleOffsetSec).apply()
+    }
 
     LaunchedEffect(episode) {
         parsedCues = emptyList()
         selectedSubtitle = null
         availableSubtitles = emptyList()
-        subtitleOffsetSec = 0f
+        // subtitleOffsetSec is remembered and persists across episode changes
     }
 
     var seekCumulativeSeconds by remember { mutableStateOf(0) }
@@ -356,7 +364,6 @@ fun PlayerScreen(
 
     var seekTargetInitialMs by remember(episode.ordinal, initialPositionMs) { mutableLongStateOf(initialPositionMs) }
 
-    val playerPrefs = remember { context.getSharedPreferences("metro_player_prefs", android.content.Context.MODE_PRIVATE) }
     var isUpscaleEnabled by remember { mutableStateOf(playerPrefs.getBoolean("upscale_enabled", false)) }
     var upscaleHudVisible by remember { mutableStateOf(false) }
 
@@ -2530,7 +2537,7 @@ fun PlayerScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                listOf(-5f, -1f, -0.5f, 0f, 0.5f, 1f, 5f).forEach { delta ->
+                                listOf(-5f, -1f, -0.5f, 0f, 0.5f, 1f, 5f, 8f).forEach { delta ->
                                     val isReset = delta == 0f
                                     val label = if (isReset) "0" else String.format(Locale.US, "%+.1f", delta).removeSuffix(".0")
                                     Box(
