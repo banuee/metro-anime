@@ -72,29 +72,36 @@ object HiAnimeClient {
 
     private fun parseSearchHtml(html: String): List<AnimeTitle> {
         val list = mutableListOf<AnimeTitle>()
-        // Only inspect results within the actual search results wrapper,
-        // ignoring sidebar/trending widgets when there are no search results.
-        val wrapPattern = Pattern.compile(
-            "<div class=\"film_list-wrap\">(.*?)(?:<div class=\"clearfix\"|<div class=\"pagination\"|</section>)",
+        // Only inspect results within the main search results container,
+        // strictly ignoring sidebar/trending widgets when there are no search results.
+        val mainPattern = Pattern.compile(
+            """id=["']main-content["'][^>]*>(.*?)<div\s+id=["']main-sidebar["']""",
             Pattern.DOTALL or Pattern.CASE_INSENSITIVE
         )
-        val wrapMatcher = wrapPattern.matcher(html)
-        val searchSection = if (wrapMatcher.find()) wrapMatcher.group(1).orEmpty() else return emptyList()
+        val mainMatcher = mainPattern.matcher(html)
+        val searchSection = if (mainMatcher.find()) mainMatcher.group(1).orEmpty() else html
+
+        if (!searchSection.contains("film_list-wrap") && !searchSection.contains("film-name")) {
+            return emptyList()
+        }
 
         // Match each item in search results:
-        // <h3 class="film-name"><a href="/my-hero-academia-1395" title="My Hero Academia"
-        val itemPattern = Pattern.compile(
-            "<h3 class=\"film-name\">\\s*<a\\s+href=\"([^\"]+)\"\\s+title=\"([^\"]+)\"",
+        // <h3 class="film-name"><a href="/my-hero-academia-1395" title="My Hero Academia" data-jname="Boku no Hero Academia"
+        val aTagPattern = Pattern.compile(
+            """<h3 class=["']film-name["']>\s*<a\s+([^>]+)>""",
             Pattern.CASE_INSENSITIVE
         )
-        val posterPattern = Pattern.compile("data-src=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE)
+        val posterPattern = Pattern.compile("""data-src=["']([^"']+)["']""", Pattern.CASE_INSENSITIVE)
 
-        val matcher = itemPattern.matcher(searchSection)
+        val matcher = aTagPattern.matcher(searchSection)
         val seenIds = mutableSetOf<String>()
 
         while (matcher.find()) {
-            val href = matcher.group(1)?.trim() ?: continue
-            val rawTitle = matcher.group(2)?.trim() ?: continue
+            val attrs = matcher.group(1) ?: continue
+            val href = extractAttr(attrs, "href") ?: continue
+            val rawTitle = extractAttr(attrs, "title") ?: continue
+            val jname = extractAttr(attrs, "data-jname")
+
             val slugWithId = href.removePrefix("https://hianime.at").removePrefix("/").removePrefix("watch/")
             val cleanId = slugWithId.substringBefore("?")
             if (cleanId.isBlank() || seenIds.contains(cleanId)) continue
@@ -109,17 +116,25 @@ object HiAnimeClient {
                 posterUrl = posterMatcher.group(1).orEmpty()
             }
 
+            val effectiveOrig = if (!jname.isNullOrBlank()) jname else rawTitle
+
             list.add(
                 AnimeTitle(
                     id = "hianime_$cleanId",
                     titleRu = rawTitle,
-                    titleOrig = rawTitle,
+                    titleOrig = effectiveOrig,
                     posterUrl = posterUrl,
                     source = AnimeSource.HIANIME,
                 )
             )
         }
         return list
+    }
+
+    private fun extractAttr(attrs: String, attrName: String): String? {
+        val pattern = Pattern.compile("""$attrName=["']([^"']*)["']""", Pattern.CASE_INSENSITIVE)
+        val m = pattern.matcher(attrs)
+        return if (m.find()) m.group(1)?.trim() else null
     }
 
     /**

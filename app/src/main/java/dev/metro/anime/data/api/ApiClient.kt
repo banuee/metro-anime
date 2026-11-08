@@ -299,7 +299,12 @@ object ApiClient {
                     val body = response.body?.string() ?: return@use
                     val obj = gson.fromJson(body, JsonObject::class.java)
                     val ru = obj.get("russian")?.takeIf { !it.isJsonNull }?.asString
-                    val en = obj.get("name")?.takeIf { !it.isJsonNull }?.asString
+                    val romaji = obj.get("name")?.takeIf { !it.isJsonNull }?.asString
+                    val englishArr = obj.getAsJsonArray("english")
+                    val englishName = englishArr?.firstOrNull { it.isJsonPrimitive && it.asString.isNotBlank() }?.asString
+                    val synonymsArr = obj.getAsJsonArray("synonyms")
+                    val synEn = synonymsArr?.firstOrNull { it.isJsonPrimitive && it.asString.isNotBlank() && it.asString.any { c -> c in 'a'..'z' || c in 'A'..'Z' } }?.asString
+                    val en = englishName ?: synEn ?: romaji
                     val imgObj = obj.getAsJsonObject("image")
                     val origImg = imgObj?.get("original")?.takeIf { !it.isJsonNull }?.asString
                     val poster = if (origImg != null) {
