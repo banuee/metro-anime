@@ -367,10 +367,29 @@ class AnimeRepository(context: Context) {
         return 1
     }
 
-    private fun matchBestHiAnimeTitle(titles: List<AnimeTitle>, targetSeason: Int): AnimeTitle? {
+    private fun matchBestHiAnimeTitle(titles: List<AnimeTitle>, targetQuery: String, targetSeason: Int): AnimeTitle? {
         if (titles.isEmpty()) return null
+
+        val cleanTarget = targetQuery.replace(Regex("\\[[^\\]]*\\]|\\([^\\)]*\\)"), " ").trim()
+        val targetTokens = normalizeForSearch(cleanTarget)
+            .split(" ")
+            .filter { it.length > 1 && it !in STOP_WORDS }
+            .toSet()
+
+        // Filter candidates that share at least one meaningful token with target
+        val matchingCandidates = titles.filter { candidate ->
+            val cTokens = normalizeForSearch(candidate.titleRu)
+                .split(" ")
+                .filter { it.length > 1 && it !in STOP_WORDS }
+                .toSet()
+            val overlap = targetTokens.intersect(cTokens)
+            overlap.isNotEmpty() || targetTokens.any { t -> candidate.titleRu.contains(t, ignoreCase = true) }
+        }
+
+        if (matchingCandidates.isEmpty()) return null
+
         if (targetSeason <= 1) {
-            val s1 = titles.find {
+            val s1 = matchingCandidates.find {
                 val s = extractSeasonNumber(it.titleRu) ?: 1
                 s == 1 &&
                         !it.id.contains("season-2") &&
@@ -382,7 +401,7 @@ class AnimeRepository(context: Context) {
             }
             if (s1 != null) return s1
         } else {
-            val sMatch = titles.find {
+            val sMatch = matchingCandidates.find {
                 val s = extractSeasonNumber(it.titleRu)
                 s == targetSeason ||
                         it.id.contains("season-$targetSeason") ||
@@ -390,7 +409,7 @@ class AnimeRepository(context: Context) {
             }
             if (sMatch != null) return sMatch
         }
-        return titles.firstOrNull()
+        return matchingCandidates.firstOrNull()
     }
 
     private fun calculateRelevanceScore(
@@ -621,16 +640,32 @@ class AnimeRepository(context: Context) {
 
         // Format HiAnime dubs (English Dub and Sub)
         try {
-            val rawEnQuery = details.title.titleOrig?.takeIf { it.isNotBlank() }
-                ?: (if (details.title.titleRu.any { it in 'a'..'z' || it in 'A'..'Z' }) details.title.titleRu else titleQuery)
-            if (!rawEnQuery.isNullOrBlank()) {
+            var rawEnQuery = details.title.titleOrig?.takeIf { it.isNotBlank() && it.any { c -> c in 'a'..'z' || c in 'A'..'Z' } }
+            if (rawEnQuery == null) {
+                val shikiId = details.title.shikimoriId ?: shikimoriId
+                if (shikiId != null && shikiId > 0) {
+                    val shikiDetails = ApiClient.getShikimoriDetails(shikiId)
+                    val orig = shikiDetails?.titleOrig?.takeIf { it.isNotBlank() && it.any { c -> c in 'a'..'z' || c in 'A'..'Z' } }
+                    if (orig != null) {
+                        rawEnQuery = orig
+                    }
+                }
+            }
+            if (rawEnQuery == null && details.title.titleRu.any { it in 'a'..'z' || it in 'A'..'Z' }) {
+                rawEnQuery = details.title.titleRu
+            }
+            if (rawEnQuery == null && titleQuery?.any { it in 'a'..'z' || it in 'A'..'Z' } == true) {
+                rawEnQuery = titleQuery
+            }
+
+            if (!rawEnQuery.isNullOrBlank() && rawEnQuery.any { it in 'a'..'z' || it in 'A'..'Z' }) {
                 val cleanEnQuery = rawEnQuery.replace(Regex("\\[[^\\]]*\\]|\\([^\\)]*\\)"), "").trim()
                 var hiMatches = HiAnimeClient.searchHiAnime(cleanEnQuery)
                 if (hiMatches.isEmpty() && cleanEnQuery != rawEnQuery) {
                     hiMatches = HiAnimeClient.searchHiAnime(rawEnQuery)
                 }
                 val targetSeason = extractSeasonNumber(details.title.titleRu.ifBlank { titleQuery ?: "" }) ?: 1
-                val bestMatch = matchBestHiAnimeTitle(hiMatches, targetSeason) ?: hiMatches.firstOrNull()
+                val bestMatch = matchBestHiAnimeTitle(hiMatches, cleanEnQuery, targetSeason)
                 if (bestMatch != null) {
                     val hiEpisodes = HiAnimeClient.getEpisodes(bestMatch.id)
                     if (hiEpisodes.isNotEmpty()) {

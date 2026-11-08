@@ -47,8 +47,11 @@ object HiAnimeClient {
      * Search anime on HiAnime by title.
      */
     suspend fun searchHiAnime(query: String): List<AnimeTitle> = withContext(Dispatchers.IO) {
-        if (query.isBlank()) return@withContext emptyList()
-        val url = "$BASE_URL/search?keyword=${URLEncoder.encode(query, "UTF-8")}"
+        val trimmed = query.trim()
+        if (trimmed.isBlank() || !trimmed.any { it in 'a'..'z' || it in 'A'..'Z' }) {
+            return@withContext emptyList()
+        }
+        val url = "$BASE_URL/search?keyword=${URLEncoder.encode(trimmed, "UTF-8")}"
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", USER_AGENT)
@@ -69,6 +72,15 @@ object HiAnimeClient {
 
     private fun parseSearchHtml(html: String): List<AnimeTitle> {
         val list = mutableListOf<AnimeTitle>()
+        // Only inspect results within the actual search results wrapper,
+        // ignoring sidebar/trending widgets when there are no search results.
+        val wrapPattern = Pattern.compile(
+            "<div class=\"film_list-wrap\">(.*?)(?:<div class=\"clearfix\"|<div class=\"pagination\"|</section>)",
+            Pattern.DOTALL or Pattern.CASE_INSENSITIVE
+        )
+        val wrapMatcher = wrapPattern.matcher(html)
+        val searchSection = if (wrapMatcher.find()) wrapMatcher.group(1).orEmpty() else return emptyList()
+
         // Match each item in search results:
         // <h3 class="film-name"><a href="/my-hero-academia-1395" title="My Hero Academia"
         val itemPattern = Pattern.compile(
@@ -77,7 +89,7 @@ object HiAnimeClient {
         )
         val posterPattern = Pattern.compile("data-src=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE)
 
-        val matcher = itemPattern.matcher(html)
+        val matcher = itemPattern.matcher(searchSection)
         val seenIds = mutableSetOf<String>()
 
         while (matcher.find()) {
@@ -90,7 +102,7 @@ object HiAnimeClient {
 
             // Look backward in the segment for poster
             val segStart = (matcher.start() - 600).coerceAtLeast(0)
-            val seg = html.substring(segStart, matcher.start())
+            val seg = searchSection.substring(segStart, matcher.start())
             val posterMatcher = posterPattern.matcher(seg)
             var posterUrl = ""
             while (posterMatcher.find()) {

@@ -840,62 +840,116 @@ object ApiClient {
      */
     suspend fun resolveKodikStream(embedUrl: String): Map<String, String> = withContext(Dispatchers.IO) {
         try {
-            val req1 = Request.Builder().url(embedUrl).build()
+            val normalizedUrl = if (embedUrl.startsWith("//")) "https:$embedUrl" else embedUrl
+            val uri = java.net.URI(normalizedUrl)
+            val host = uri.host ?: "kodikplayer.com"
+
+            val req1 = Request.Builder()
+                .url(normalizedUrl)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                .build()
             val html = client.newCall(req1).execute().use { it.body?.string().orEmpty() }
 
-            // Extract script URL
-            val scriptMatcher = Pattern.compile("<script[^>]+src=[\"']([^\"']+)[\"']").matcher(html)
+            // Extract vInfo.hash, vInfo.id, vInfo.type
+            var videoHash = ""
+            var videoId = ""
+            var type = ""
+
+            val vInfoHashMatch = Pattern.compile("""vInfo\.hash\s*=\s*['"]([^'"]+)['"]""").matcher(html)
+            if (vInfoHashMatch.find()) {
+                videoHash = vInfoHashMatch.group(1).orEmpty()
+            }
+            val vInfoIdMatch = Pattern.compile("""vInfo\.id\s*=\s*['"]([^'"]+)['"]""").matcher(html)
+            if (vInfoIdMatch.find()) {
+                videoId = vInfoIdMatch.group(1).orEmpty()
+            }
+            val vInfoTypeMatch = Pattern.compile("""vInfo\.type\s*=\s*['"]([^'"]+)['"]""").matcher(html)
+            if (vInfoTypeMatch.find()) {
+                type = vInfoTypeMatch.group(1).orEmpty()
+            }
+
+            // Fallback to older patterns if vInfo is not present
+            if (videoHash.isEmpty()) {
+                val pathParts = normalizedUrl.split("/")
+                videoHash = pathParts.getOrNull(5) ?: ""
+            }
+            if (videoId.isEmpty()) {
+                val idPattern = Pattern.compile("var videoId = \"([^\"]+)\";").matcher(html)
+                if (idPattern.find()) videoId = idPattern.group(1).orEmpty()
+            }
+            if (type.isEmpty()) {
+                val typePattern = Pattern.compile("var type = \"([^\"]+)\";").matcher(html)
+                type = if (typePattern.find()) typePattern.group(1).orEmpty() else "seria"
+            }
+
+            // Extract postLink from script or fallback to /ftor
+            var postLink = "/ftor"
+            val scriptMatcher = Pattern.compile("""<script[^>]+src=["']([^"']+)["']""").matcher(html)
             var scriptUrl: String? = null
             while (scriptMatcher.find()) {
                 val s = scriptMatcher.group(1)
-                if (s?.contains("app.player_single") == true) {
+                if (s?.contains("app.player") == true || s?.contains("app.serial") == true) {
                     scriptUrl = s
                     break
                 }
             }
-            if (scriptUrl == null) return@withContext emptyMap()
 
-            val scriptText = client.newCall(Request.Builder().url("https://kodikplayer.com$scriptUrl").build())
-                .execute().use { it.body?.string().orEmpty() }
-
-            val ajaxIdx = scriptText.indexOf("$.ajax")
-            val cacheIdx = scriptText.indexOf("cache:!1")
-            if (ajaxIdx == -1 || cacheIdx == -1) return@withContext emptyMap()
-            val encodedPostLink = scriptText.substring(ajaxIdx + 30, cacheIdx - 3)
-            val postLink = String(Base64.decode(encodedPostLink, Base64.DEFAULT)).trim()
+            if (scriptUrl != null) {
+                try {
+                    val fullScriptUrl = if (scriptUrl.startsWith("http")) scriptUrl else "https://$host$scriptUrl"
+                    val scriptText = client.newCall(Request.Builder().url(fullScriptUrl).build())
+                        .execute().use { it.body?.string().orEmpty() }
+                    val ajaxIdx = scriptText.indexOf("$.ajax")
+                    val cacheIdx = scriptText.indexOf("cache:!1")
+                    if (ajaxIdx != -1 && cacheIdx != -1) {
+                        val encodedPostLink = scriptText.substring(ajaxIdx + 30, cacheIdx - 3).replace("\"", "").replace("'", "").trim()
+                        val decoded = String(Base64.decode(encodedPostLink, Base64.DEFAULT)).trim()
+                        if (decoded.isNotBlank() && decoded.startsWith("/")) {
+                            postLink = decoded
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to parse script post link, using /ftor fallback", e)
+                }
+            }
 
             // Extract urlParams
             val upPattern = Pattern.compile("var urlParams = '([^']+)';").matcher(html)
-            if (!upPattern.find()) return@withContext emptyMap()
-            val urlParamsJson = gson.fromJson(upPattern.group(1).orEmpty(), JsonObject::class.java)
-
-            // Extract type, videoId, hash
-            val typePattern = Pattern.compile("var type = \"([^\"]+)\";").matcher(html)
-            val type = if (typePattern.find()) typePattern.group(1).orEmpty() else "seria"
-
-            val idPattern = Pattern.compile("var videoId = \"([^\"]+)\";").matcher(html)
-            val videoId = if (idPattern.find()) idPattern.group(1).orEmpty() else ""
-
-            val pathParts = embedUrl.split("/")
-            val videoHash = pathParts.getOrNull(5) ?: ""
+            val urlParamsJson = if (upPattern.find()) {
+                try {
+                    gson.fromJson(upPattern.group(1).orEmpty(), JsonObject::class.java)
+                } catch (_: Exception) {
+                    null
+                }
+            } else null
 
             val formBuilder = FormBody.Builder()
                 .add("hash", videoHash)
                 .add("id", videoId)
                 .add("type", type)
-                .add("d", urlParamsJson.get("d")?.asString ?: "kodikplayer.com")
-                .add("d_sign", urlParamsJson.get("d_sign")?.asString ?: "")
-                .add("pd", urlParamsJson.get("pd")?.asString ?: "kodikplayer.com")
-                .add("pd_sign", urlParamsJson.get("pd_sign")?.asString ?: "")
-                .add("ref", "")
-                .add("ref_sign", urlParamsJson.get("ref_sign")?.asString ?: "")
-                .add("bad_user", "true")
+                .add("bad_user", "false")
                 .add("cdn_is_working", "true")
 
+            if (urlParamsJson != null) {
+                for (key in urlParamsJson.keySet()) {
+                    val elem = urlParamsJson.get(key)
+                    if (elem != null && !elem.isJsonNull && elem.isJsonPrimitive) {
+                        formBuilder.add(key, elem.asString)
+                    }
+                }
+            } else {
+                formBuilder.add("d", host)
+                formBuilder.add("pd", host)
+                formBuilder.add("ref", "")
+            }
+
             val postReq = Request.Builder()
-                .url("https://kodikplayer.com$postLink")
+                .url("https://$host$postLink")
                 .post(formBuilder.build())
-                .header("Content-Type", "application/x-www-form-urlencoded")
+                .header("Referer", normalizedUrl)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
                 .build()
 
             val streamJson = client.newCall(postReq).execute().use { it.body?.string().orEmpty() }
