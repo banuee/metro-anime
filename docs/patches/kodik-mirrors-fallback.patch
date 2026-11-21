@@ -1,0 +1,409 @@
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index c1531f2..ce9ebf9 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -17,8 +17,8 @@ android {
+         applicationId = "dev.metro.anime"
+         minSdk = 26
+         targetSdk = 35
+-        versionCode = 42
+-        versionName = "0.6.6"
++        versionCode = 43
++        versionName = "0.6.7"
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+ 
+diff --git a/app/src/main/java/dev/metro/anime/data/api/ApiClient.kt b/app/src/main/java/dev/metro/anime/data/api/ApiClient.kt
+index d73a1cb..b9d675f 100644
+--- a/app/src/main/java/dev/metro/anime/data/api/ApiClient.kt
++++ b/app/src/main/java/dev/metro/anime/data/api/ApiClient.kt
+@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
+ import okhttp3.FormBody
+ import okhttp3.OkHttpClient
+ import okhttp3.Request
++import java.net.URLEncoder
+ import java.util.concurrent.TimeUnit
+ import java.util.regex.Pattern
+ 
+@@ -428,7 +429,164 @@ object ApiClient {
+         emptyList()
+     }
+ 
++    private suspend fun searchAnimeOnTitles(query: String, limit: Int = 50): List<AnimeTitle> {
++        try {
++            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
++            val searchUrl = "https://animeon.cc/api/search?q=$encodedQuery"
++            val req = Request.Builder()
++                .url(searchUrl)
++                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
++                .build()
++            val body = client.newCall(req).execute().use { resp ->
++                if (!resp.isSuccessful) return emptyList()
++                resp.body?.string() ?: return emptyList()
++            }
++            val root = gson.fromJson(body, JsonObject::class.java)
++            val results = root.getAsJsonArray("results") ?: return emptyList()
++
++            val list = mutableListOf<AnimeTitle>()
++            val seen = mutableSetOf<String>()
++
++            for (elem in results) {
++                if (list.size >= limit) break
++                val obj = elem.asJsonObject
++                val titleRu = obj.get("title")?.takeIf { !it.isJsonNull }?.asString?.trim() ?: continue
++                val titleOrig = obj.get("title_orig")?.takeIf { !it.isJsonNull }?.asString?.trim()
++                val animeUrl = obj.get("anime_url")?.takeIf { !it.isJsonNull }?.asString ?: ""
++                val shikiId = obj.get("shikimori_id")?.takeIf { !it.isJsonNull }?.asString?.toLongOrNull()
++
++                val uniqueKey = if (shikiId != null && shikiId > 0) "shiki_$shikiId" else titleRu.lowercase()
++                if (seen.contains(uniqueKey)) continue
++                seen.add(uniqueKey)
++
++                val matData = obj.getAsJsonObject("material_data")
++                val rawPoster = obj.get("poster")?.takeIf { !it.isJsonNull }?.asString
++                    ?: matData?.get("poster_url")?.takeIf { !it.isJsonNull }?.asString
++
++                val poster = if (shikiId != null && shikiId > 0) {
++                    "https://shikimori.one/system/animes/original/$shikiId.jpg"
++                } else if (!rawPoster.isNullOrBlank()) {
++                    if (rawPoster.startsWith("//")) "https:$rawPoster"
++                    else if (rawPoster.startsWith("/")) "https://animeon.cc$rawPoster"
++                    else rawPoster
++                } else ""
++
++                val year = obj.get("year")?.takeIf { !it.isJsonNull }?.asInt
++                    ?: matData?.get("year")?.takeIf { !it.isJsonNull }?.asInt
++
++                val kind = obj.get("kind")?.takeIf { !it.isJsonNull }?.asString
++                val type = when (kind?.lowercase()) {
++                    "tv" -> "Сериал"
++                    "movie" -> "Фильм"
++                    else -> kind
++                }
++
++                val epsCount = matData?.get("episodes_aired")?.takeIf { !it.isJsonNull }?.asInt
++                    ?: matData?.get("episodes_total")?.takeIf { !it.isJsonNull }?.asInt
++
++                val rating = matData?.get("shikimori_rating")?.takeIf { !it.isJsonNull }?.asDouble
++                    ?: obj.get("rating")?.takeIf { !it.isJsonNull }?.asDouble
++
++                val genresList = mutableListOf<String>()
++                matData?.getAsJsonArray("anime_genres")?.forEach { g ->
++                    if (g.isJsonPrimitive) genresList.add(g.asString)
++                }
++
++                val animeId = if (shikiId != null && shikiId > 0) "kodik_shiki_$shikiId" else "kodik_animeon_$animeUrl"
++
++                list.add(
++                    AnimeTitle(
++                        id = animeId,
++                        titleRu = titleRu,
++                        titleOrig = titleOrig,
++                        posterUrl = poster,
++                        description = null,
++                        year = year,
++                        type = type,
++                        episodesCount = epsCount,
++                        genres = genresList,
++                        rating = rating,
++                        shikimoriId = shikiId,
++                        source = AnimeSource.KODIK,
++                    )
++                )
++            }
++            return list
++        } catch (e: Exception) {
++            Log.w(TAG, "AnimeOn search error", e)
++            return emptyList()
++        }
++    }
++
++    private suspend fun searchYummyTitles(query: String, limit: Int = 50): List<AnimeTitle> {
++        try {
++            val encodedQuery = URLEncoder.encode(query.trim(), "UTF-8")
++            val searchUrl = "https://old.yummyani.me/api/search?q=$encodedQuery"
++            val req = Request.Builder()
++                .url(searchUrl)
++                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
++                .build()
++            val body = client.newCall(req).execute().use { resp ->
++                if (!resp.isSuccessful) return emptyList()
++                resp.body?.string() ?: return emptyList()
++            }
++            val root = gson.fromJson(body, JsonObject::class.java)
++            val items = root.getAsJsonArray("response") ?: return emptyList()
++
++            val list = mutableListOf<AnimeTitle>()
++            val seen = mutableSetOf<String>()
++
++            for (elem in items) {
++                if (list.size >= limit) break
++                val obj = elem.asJsonObject
++                val titleRu = obj.get("title")?.takeIf { !it.isJsonNull }?.asString?.trim() ?: continue
++                val animeId = obj.get("anime_id")?.takeIf { !it.isJsonNull }?.asString ?: ""
++                val remoteIds = obj.getAsJsonObject("remote_ids")
++                val shikiId = remoteIds?.get("shikimori_id")?.takeIf { !it.isJsonNull }?.asLong
++
++                val uniqueKey = if (shikiId != null && shikiId > 0) "shiki_$shikiId" else titleRu.lowercase()
++                if (seen.contains(uniqueKey)) continue
++                seen.add(uniqueKey)
++
++                val posterObj = obj.getAsJsonObject("poster")
++                val posterUrl = posterObj?.get("big")?.takeIf { !it.isJsonNull }?.asString?.let {
++                    if (it.startsWith("//")) "https:$it" else it
++                } ?: (if (shikiId != null && shikiId > 0) "https://shikimori.one/system/animes/original/$shikiId.jpg" else "")
++
++                val year = obj.get("year")?.takeIf { !it.isJsonNull }?.asInt
++                val typeObj = obj.getAsJsonObject("type")
++                val type = typeObj?.get("name")?.takeIf { !it.isJsonNull }?.asString ?: "Сериал"
++                val rating = obj.getAsJsonObject("rating")?.get("shikimori_rating")?.takeIf { !it.isJsonNull }?.asDouble
++
++                val id = if (shikiId != null && shikiId > 0) "kodik_shiki_$shikiId" else "kodik_yummy_$animeId"
++
++                list.add(
++                    AnimeTitle(
++                        id = id,
++                        titleRu = titleRu,
++                        posterUrl = posterUrl,
++                        year = year,
++                        type = type,
++                        rating = rating,
++                        shikimoriId = shikiId,
++                        source = AnimeSource.KODIK,
++                    )
++                )
++            }
++            return list
++        } catch (e: Exception) {
++            Log.w(TAG, "Yummy search error", e)
++            return emptyList()
++        }
++    }
++
+     suspend fun searchKodikTitles(query: String, limit: Int = 100): List<AnimeTitle> = withContext(Dispatchers.IO) {
++        val animeOnList = searchAnimeOnTitles(query, limit)
++        if (animeOnList.isNotEmpty()) return@withContext animeOnList
++
++        val yummyList = searchYummyTitles(query, limit)
++        if (yummyList.isNotEmpty()) return@withContext yummyList
++
+         val formBuilder = FormBody.Builder()
+             .add("token", KODIK_TOKEN)
+             .add("title", query)
+@@ -662,6 +820,12 @@ object ApiClient {
+     // =========================================================================
+ 
+     suspend fun getKodikDubs(shikimoriId: Long?, titleQuery: String?): List<DubbingGroup> = withContext(Dispatchers.IO) {
++        val animeOnDubs = fetchAnimeOnDubs(shikimoriId, titleQuery)
++        if (animeOnDubs.isNotEmpty()) return@withContext animeOnDubs
++
++        val yummyDubs = fetchYummyDubs(shikimoriId, titleQuery)
++        if (yummyDubs.isNotEmpty()) return@withContext yummyDubs
++
+         val formBuilder = FormBody.Builder()
+             .add("token", KODIK_TOKEN)
+             .add("with_episodes", "true")
+@@ -840,6 +1004,203 @@ object ApiClient {
+         }
+     }
+ 
++    private suspend fun fetchAnimeOnDubs(shikimoriId: Long?, titleQuery: String?): List<DubbingGroup> {
++        try {
++            val q = if (shikimoriId != null && shikimoriId > 0) shikimoriId.toString() else titleQuery?.trim() ?: return emptyList()
++            val encodedQuery = URLEncoder.encode(q, "UTF-8")
++            val searchUrl = "https://animeon.cc/api/search?q=$encodedQuery"
++            val req = Request.Builder()
++                .url(searchUrl)
++                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
++                .build()
++            val searchBody = client.newCall(req).execute().use { resp ->
++                if (!resp.isSuccessful) return emptyList()
++                resp.body?.string() ?: return emptyList()
++            }
++            val searchRoot = gson.fromJson(searchBody, JsonObject::class.java)
++            val results = searchRoot.getAsJsonArray("results") ?: return emptyList()
++            if (results.size() == 0) return emptyList()
++
++            var matchedUrl: String? = null
++            if (shikimoriId != null && shikimoriId > 0) {
++                val sIdStr = shikimoriId.toString()
++                for (elem in results) {
++                    val obj = elem.asJsonObject
++                    if (obj.get("shikimori_id")?.takeIf { !it.isJsonNull }?.asString == sIdStr) {
++                        matchedUrl = obj.get("anime_url")?.takeIf { !it.isJsonNull }?.asString
++                        break
++                    }
++                }
++            }
++            if (matchedUrl == null && results.size() > 0) {
++                matchedUrl = results[0].asJsonObject.get("anime_url")?.takeIf { !it.isJsonNull }?.asString
++            }
++            if (matchedUrl.isNullOrBlank()) return emptyList()
++
++            val detailUrl = "https://animeon.cc/api/anime/$matchedUrl"
++            val detailReq = Request.Builder()
++                .url(detailUrl)
++                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
++                .build()
++            val detailBody = client.newCall(detailReq).execute().use { resp ->
++                if (!resp.isSuccessful) return emptyList()
++                resp.body?.string() ?: return emptyList()
++            }
++            val detailRoot = gson.fromJson(detailBody, JsonObject::class.java)
++            val translations = detailRoot.getAsJsonObject("translations") ?: return emptyList()
++
++            val dubGroups = mutableListOf<DubbingGroup>()
++            for (rawDubName in translations.keySet()) {
++                val dubObj = translations.getAsJsonObject(rawDubName) ?: continue
++                val dubTitle = rawDubName.replace("_", " ").trim()
++                val episodesList = mutableListOf<AnimeEpisode>()
++                val epObj = dubObj.getAsJsonObject("episodes")
++
++                if (epObj != null) {
++                    for (epKey in epObj.keySet()) {
++                        val epElem = epObj.get(epKey) ?: continue
++                        val ord = epKey.toIntOrNull() ?: 1
++                        var link: String? = null
++                        var preview: String? = null
++                        if (epElem.isJsonObject) {
++                            val o = epElem.asJsonObject
++                            link = o.get("link")?.takeIf { !it.isJsonNull }?.asString
++                            val screens = o.getAsJsonArray("screenshots")
++                            preview = screens?.firstOrNull()?.takeIf { !it.isJsonNull }?.asString?.let {
++                                if (it.startsWith("//")) "https:$it" else it
++                            }
++                        } else if (epElem.isJsonPrimitive) {
++                            link = epElem.asString
++                        }
++                        if (link.isNullOrBlank()) continue
++                        val fullUrl = if (link.startsWith("//")) "https:$link" else link
++                        episodesList.add(
++                            AnimeEpisode(
++                                ordinal = ord,
++                                name = "Серия $ord",
++                                hlsStreams = mapOf("embed" to fullUrl),
++                                previewUrl = preview,
++                            )
++                        )
++                    }
++                } else {
++                    val singleLink = dubObj.get("link")?.takeIf { !it.isJsonNull }?.asString
++                    if (!singleLink.isNullOrBlank()) {
++                        val fullUrl = if (singleLink.startsWith("//")) "https:$singleLink" else singleLink
++                        episodesList.add(
++                            AnimeEpisode(
++                                ordinal = 1,
++                                name = "Фильм / Серия 1",
++                                hlsStreams = mapOf("embed" to fullUrl),
++                            )
++                        )
++                    }
++                }
++
++                if (episodesList.isNotEmpty()) {
++                    episodesList.sortBy { it.ordinal }
++                    dubGroups.add(
++                        DubbingGroup(
++                            id = "kodik_animeon_${rawDubName.lowercase()}",
++                            title = dubTitle,
++                            source = AnimeSource.KODIK,
++                            episodes = episodesList,
++                        )
++                    )
++                }
++            }
++            return dubGroups
++        } catch (e: Exception) {
++            Log.w(TAG, "AnimeOn dub fetch error", e)
++            return emptyList()
++        }
++    }
++
++    private suspend fun fetchYummyDubs(shikimoriId: Long?, titleQuery: String?): List<DubbingGroup> {
++        try {
++            val q = titleQuery?.trim() ?: shikimoriId?.toString() ?: return emptyList()
++            val encodedQuery = URLEncoder.encode(q, "UTF-8")
++            val searchUrl = "https://old.yummyani.me/api/search?q=$encodedQuery"
++            val req = Request.Builder()
++                .url(searchUrl)
++                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
++                .build()
++            val searchBody = client.newCall(req).execute().use { resp ->
++                if (!resp.isSuccessful) return emptyList()
++                resp.body?.string() ?: return emptyList()
++            }
++            val searchRoot = gson.fromJson(searchBody, JsonObject::class.java)
++            val items = searchRoot.getAsJsonArray("response") ?: return emptyList()
++            if (items.size() == 0) return emptyList()
++
++            var matchedAnimeId: Int? = null
++            if (shikimoriId != null && shikimoriId > 0) {
++                for (elem in items) {
++                    val o = elem.asJsonObject
++                    val rIds = o.getAsJsonObject("remote_ids")
++                    if (rIds?.get("shikimori_id")?.takeIf { !it.isJsonNull }?.asLong == shikimoriId) {
++                        matchedAnimeId = o.get("anime_id")?.takeIf { !it.isJsonNull }?.asInt
++                        break
++                    }
++                }
++            }
++            if (matchedAnimeId == null && items.size() > 0) {
++                matchedAnimeId = items[0].asJsonObject.get("anime_id")?.takeIf { !it.isJsonNull }?.asInt
++            }
++            if (matchedAnimeId == null) return emptyList()
++
++            val videosUrl = "https://old.yummyani.me/api/anime/$matchedAnimeId/videos"
++            val videosReq = Request.Builder()
++                .url(videosUrl)
++                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
++                .build()
++            val videosBody = client.newCall(videosReq).execute().use { resp ->
++                if (!resp.isSuccessful) return emptyList()
++                resp.body?.string() ?: return emptyList()
++            }
++            val videosRoot = gson.fromJson(videosBody, JsonObject::class.java)
++            val videoItems = videosRoot.getAsJsonArray("response") ?: return emptyList()
++
++            val byDubbing = mutableMapOf<String, MutableList<AnimeEpisode>>()
++            for (vElem in videoItems) {
++                val vObj = vElem.asJsonObject
++                val dataObj = vObj.getAsJsonObject("data")
++                val player = dataObj?.get("player")?.takeIf { !it.isJsonNull }?.asString.orEmpty()
++                val iframeUrl = vObj.get("iframe_url")?.takeIf { !it.isJsonNull }?.asString.orEmpty()
++                if (!player.contains("Kodik", ignoreCase = true) && !iframeUrl.contains("kodik", ignoreCase = true)) {
++                    continue
++                }
++                var dubName = dataObj?.get("dubbing")?.takeIf { !it.isJsonNull }?.asString.orEmpty().ifBlank { "Kodik" }
++                dubName = dubName.removePrefix("Озвучка ").trim()
++                val numStr = vObj.get("number")?.takeIf { !it.isJsonNull }?.asString ?: "1"
++                val ord = numStr.toIntOrNull() ?: 1
++                val fullUrl = if (iframeUrl.startsWith("//")) "https:$iframeUrl" else iframeUrl
++
++                val list = byDubbing.getOrPut(dubName) { mutableListOf() }
++                list.add(
++                    AnimeEpisode(
++                        ordinal = ord,
++                        name = "Серия $ord",
++                        hlsStreams = mapOf("embed" to fullUrl),
++                    )
++                )
++            }
++
++            return byDubbing.map { (dubName, eps) ->
++                val sorted = eps.distinctBy { it.ordinal }.sortedBy { it.ordinal }
++                DubbingGroup(
++                    id = "kodik_yummy_${dubName.lowercase()}",
++                    title = dubName,
++                    source = AnimeSource.KODIK,
++                    episodes = sorted,
++                )
++            }
++        } catch (e: Exception) {
++            Log.w(TAG, "Yummy dub fetch error", e)
++            return emptyList()
++        }
++    }
++
+     /**
+      * Resolves a Kodik embed URL into direct playable video streams (.m3u8).
+      */
